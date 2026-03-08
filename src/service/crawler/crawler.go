@@ -151,19 +151,15 @@ func discoverCommonFeedURLs(base *url.URL) []string {
 		"/feeds/posts/default?alt=rss",
 	}
 
-	found := make([]string, 0)
-	seen := make(map[string]struct{}, len(candidates))
+	found := make([]string, 0, 1)
 	for _, candidate := range candidates {
 		abs := toAbsoluteURL(root, candidate)
 		if abs == "" {
 			continue
 		}
-		if _, ok := seen[abs]; ok {
-			continue
-		}
 		if isValidFeedURL(abs) {
 			found = append(found, abs)
-			seen[abs] = struct{}{}
+			break
 		}
 	}
 	return found
