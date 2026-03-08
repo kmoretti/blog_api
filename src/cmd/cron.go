@@ -4,13 +4,36 @@ import (
 	"blog_api/src/config"
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
-	"blog_api/src/service"
 	crawlerService "blog_api/src/service/crawler"
 	"log"
+	"time"
 
 	"github.com/robfig/cron/v3"
 	"gorm.io/gorm"
 )
+
+func scheduleFromNextMidnight(jobName string, interval time.Duration, job func()) {
+	go func() {
+		now := time.Now()
+		nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
+		firstRunAt := nextMidnight.Add(interval)
+		initialDelay := time.Until(firstRunAt)
+
+		log.Printf("[Cron] %s 将于 %s 首次执行（下一天 0 点后 + %s），之后每 %s 执行一次", jobName, firstRunAt.Format(time.RFC3339), interval, interval)
+
+		timer := time.NewTimer(initialDelay)
+		defer timer.Stop()
+
+		<-timer.C
+		job()
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			job()
+		}
+	}()
+}
 
 // RunFriendLinkCrawlerJob 执行友链爬取并发现 RSS 订阅源（并发模式）
 func RunFriendLinkCrawlerJob(db *gorm.DB) {
@@ -98,6 +121,35 @@ func RunDiedFriendLinkCheckJob(db *gorm.DB) {
 	log.Println("[Cron] 失效友链检查任务完成")
 }
 
+// RunDiedRssCheckJob 执行失效 RSS 的探活检查（低频）
+func RunDiedRssCheckJob(db *gorm.DB) {
+	log.Println("[Cron] 正在运行失效 RSS 探活任务...")
+	isDied := true
+	opts := model.FriendRssQueryOptions{
+		IsDied: &isDied,
+	}
+	resp, err := friendsRepositories.QueryFriendRss(db, opts)
+	if err != nil {
+		log.Printf("[Cron] 获取失效 RSS 失败: %v", err)
+		return
+	}
+	rssFeeds := resp.Feeds
+
+	if len(rssFeeds) == 0 {
+		log.Println("[Cron] 没有需要探活的失效 RSS")
+		return
+	}
+
+	for _, feed := range rssFeeds {
+		if feed.Status == "pause" {
+			continue
+		}
+		crawlerService.CheckAndReviveRssFeed(db, feed.ID, feed.RssURL)
+	}
+
+	log.Println("[Cron] 失效 RSS 探活任务完成")
+}
+
 // RunRssParserJob 获取所有 RSS 订阅源并解析它们（并发模式）
 func RunRssParserJob(db *gorm.DB) {
 	log.Println("[Cron] 正在运行 RSS 解析任务（并发模式）...")
@@ -121,11 +173,17 @@ func RunRssParserJob(db *gorm.DB) {
 	log.Println("[Cron] RSS 解析任务完成")
 }
 
-// RunImageCheckJob 执行图片资源检查任务
-func RunImageCheckJob(db *gorm.DB) {
-	log.Println("[Cron] 正在运行图片资源检查任务...")
-	crawlerService.CheckImagesHealth(db)
-	log.Println("[Cron] 图片资源检查任务完成")
+func scheduleDiedCheckEvery48h(db *gorm.DB) {
+	scheduleFromNextMidnight("失效检查（友链+RSS）", 48*time.Hour, func() {
+		RunDiedFriendLinkCheckJob(db)
+		RunDiedRssCheckJob(db)
+	})
+}
+
+func scheduleImageCheckEvery48h(db *gorm.DB) {
+	scheduleFromNextMidnight("图片资源检查", 48*time.Hour, func() {
+		crawlerService.CheckImagesHealth(db)
+	})
 }
 
 // StartCronJobs 初始化并启动 cron 任务
@@ -137,37 +195,18 @@ func StartCronJobs(db *gorm.DB) {
 		RunFriendLinkCrawlerJob(db)
 	})
 
-	// 安排失效友链检查任务每 24 小时运行一次
-	c.AddFunc("0 0 * * *", func() {
-		RunDiedFriendLinkCheckJob(db)
-	})
+	// 安排慢检查任务从下一天 0 点开始，每 48 小时运行一次
+	scheduleDiedCheckEvery48h(db)
+	scheduleImageCheckEvery48h(db)
 
 	// 安排 RSS 解析任务每 3 小时运行一次
 	c.AddFunc("0 */3 * * *", func() {
 		RunRssParserJob(db)
 	})
-
-	// 安排图片资源检查任务每 24 小时运行一次
-	c.AddFunc("30 0 * * *", func() {
-		RunImageCheckJob(db)
-	})
-
-	// 如果启用了状态日志，则安排任务
-	if config.GetConfig().EnableStatusLog {
-		// 安排系统状态日志记录任务每 5 分钟运行一次
-		c.AddFunc("*/5 * * * *", func() {
-			service.LogSystemStatus(db)
-		})
-		log.Println("[Cron] 已启用系统状态日志记录任务")
-	}
-
 	// 如果配置了启动时扫描，则立即运行一次任务
 	if config.GetConfig().CronScanOnStartup {
 		go func() {
 			log.Println("[Cron] 调度启动时扫描任务")
-			if config.GetConfig().EnableStatusLog {
-				service.LogSystemStatus(db)
-			}
 			RunFriendLinkCrawlerJob(db)
 			RunRssParserJob(db)
 		}()

@@ -6,7 +6,9 @@ export interface RssFeed {
   friend_link_id: number
   name: string
   rss_url: string
+  times: number
   status: string
+  is_died: boolean
   updated_at: number
 }
 

@@ -46,7 +46,6 @@ func loadConfig() (*model.Config, error) {
 
 	// 设置默认值
 	v.SetDefault("CRON_SCAN_ON_STARTUP", true)
-	v.SetDefault("ENABLE_STATUS_LOG", false)
 	v.SetConfigFile(".env")
 	v.SetConfigType("env")
 	v.AutomaticEnv()                                   // 自动读取匹配的环境变量
@@ -110,7 +109,6 @@ func unmarshalConfig(cfg *model.Config) error {
 	cfg.WebPanelPwd = v.GetString("WEB_PANEL_PWD")
 	cfg.ConfigPath = v.GetString("CONFIG_PATH")
 	cfg.CronScanOnStartup = v.GetBool("CRON_SCAN_ON_STARTUP")
-	cfg.EnableStatusLog = v.GetBool("ENABLE_STATUS_LOG")
 	cfg.IsDev = parseEnvBool(v.GetString("IS_DEV"))
 
 	// 设置默认值

@@ -38,6 +38,14 @@
               <el-tag :type="statusTagType(row.status)" size="small">{{ row.status }}</el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="times" label="失败次数" width="90" />
+          <el-table-column label="失效" width="80">
+            <template #default="{ row }">
+              <el-tag :type="row.is_died ? 'danger' : 'success'" size="small">
+                {{ row.is_died ? '是' : '否' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="160">
             <template #default="{ row }">
               <el-button type="primary" link :icon="Edit" @click.stop="handleEdit(row)">
@@ -68,7 +76,10 @@
       <el-card shadow="never" class="full-height-card">
         <template #header>
           <div class="card-header">
-            <span>{{ selectedFeed ? selectedFeed.name : '请选择一个订阅源' }}</span>
+            <span>{{ viewTitle }}</span>
+            <el-button type="primary" link @click="showAllPosts" style="margin-left: auto">
+              查看所有
+            </el-button>
           </div>
         </template>
         <el-table
@@ -119,6 +130,9 @@
             <el-option label="错误" value="error"></el-option>
           </el-select>
         </el-form-item>
+        <el-form-item label="失效" prop="is_died">
+          <el-switch v-model="editForm.is_died" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="editDialogVisible = false">取消</el-button>
@@ -145,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { usePagination } from '@/utils/pagination'
 import { formatDate } from '@/utils/date'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -153,6 +167,7 @@ import { Edit, Delete, Link } from '@element-plus/icons-vue'
 import {
   getRssFeeds,
   getPostsByFeed,
+  getAllPosts,
   updateRssFeed,
   deleteRssFeed,
   createRssFeed
@@ -162,16 +177,25 @@ import type { RssFeed, RssPost } from '@/model/rss'
 const feeds = ref<RssFeed[]>([])
 const posts = ref<RssPost[]>([])
 const selectedFeed = ref<RssFeed | null>(null)
+const isAllPostsView = ref(false)
 
 const feedsLoading = ref(false)
 const postsLoading = ref(false)
+
+const viewTitle = computed(() => {
+  if (isAllPostsView.value) {
+    return '所有文章'
+  }
+  return selectedFeed.value ? selectedFeed.value.name : '请选择一个订阅源'
+})
 
 const editDialogVisible = ref(false)
 const editForm = reactive({
   id: 0,
   name: '',
   rss_url: '',
-  status: 'survival'
+  status: 'survival',
+  is_died: false
 })
 
 const createDialogVisible = ref(false)
@@ -234,6 +258,31 @@ const fetchPosts = async () => {
   }
 }
 
+const fetchAllPosts = async () => {
+  postsLoading.value = true
+  try {
+    const res = await getAllPosts(currentPostPage.value, postPageSize.value)
+    if (res.code === 200) {
+      posts.value = res.data.items
+      totalPosts.value = res.data.total
+    } else {
+      ElMessage.error(res.message || '获取所有文章列表失败')
+    }
+  } catch (error) {
+    // The request interceptor handles error messages
+  } finally {
+    postsLoading.value = false
+  }
+}
+
+const fetchCurrentViewPosts = () => {
+  if (isAllPostsView.value) {
+    fetchAllPosts()
+  } else {
+    fetchPosts()
+  }
+}
+
 // Feeds pagination
 const {
   currentPage: currentFeedPage,
@@ -251,13 +300,21 @@ const {
   handlePageChange: handlePostPageChange,
   handleSizeChange: handlePostSizeChange,
   reset: resetPostPagination
-} = usePagination(fetchPosts, 20)
+} = usePagination(fetchCurrentViewPosts, 20)
 
 const handleFeedSelect = (feed: RssFeed) => {
-  if (selectedFeed.value?.id === feed.id) return
+  if (selectedFeed.value?.id === feed.id && !isAllPostsView.value) return
+  isAllPostsView.value = false
   selectedFeed.value = feed
   resetPostPagination()
   fetchPosts()
+}
+
+const showAllPosts = () => {
+  isAllPostsView.value = true
+  selectedFeed.value = null
+  resetPostPagination()
+  fetchAllPosts()
 }
 
 const handleEdit = (feed: RssFeed) => {
@@ -265,6 +322,7 @@ const handleEdit = (feed: RssFeed) => {
   editForm.name = feed.name
   editForm.rss_url = feed.rss_url
   editForm.status = feed.status
+  editForm.is_died = feed.is_died
   editDialogVisible.value = true
 }
 
@@ -273,7 +331,8 @@ const handleSave = async () => {
     const res = await updateRssFeed(editForm.id, {
       name: editForm.name,
       rss_url: editForm.rss_url,
-      status: editForm.status
+      status: editForm.status,
+      is_died: editForm.is_died
     })
     if (res.code === 200) {
       ElMessage.success('更新成功')
@@ -360,6 +419,7 @@ onMounted(() => {
 .card-header {
   font-weight: bold;
   display: flex;
+  align-items: center;
 }
 
 .post-link {

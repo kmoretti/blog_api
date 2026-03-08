@@ -44,7 +44,9 @@ type FriendRss struct {
 	FriendLinkID int    `json:"friend_link_id" gorm:"column:friend_link_id"`
 	Name         string `json:"name" gorm:"column:name"`
 	RssURL       string `json:"rss_url" gorm:"column:rss_url"`
+	Times        int    `json:"times" gorm:"column:times"`
 	Status       string `json:"status" gorm:"column:status"`
+	IsDied       bool   `json:"is_died" gorm:"column:is_died"`
 	UpdatedAt    int64  `json:"updated_at" gorm:"column:updated_at"`
 }
 
@@ -73,6 +75,7 @@ func (RssPost) TableName() string {
 type FriendRssQueryOptions struct {
 	FriendLinkID int    // Filter by friend link ID
 	Status       string // Filter by status
+	IsDied       *bool  // Filter by is_died status
 	Page         int    // Page number for pagination
 	PageSize     int    // Number of items per page
 }

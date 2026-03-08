@@ -109,6 +109,9 @@ func CrawlWebsite(url string) model.CrawlResult {
 	} else {
 		rssURLs = rss2URLs
 	}
+	if len(rssURLs) == 0 {
+		rssURLs = discoverCommonFeedURLs(resp.Request.URL)
+	}
 
 	return model.CrawlResult{
 		Description: description,
@@ -125,4 +128,52 @@ func toAbsoluteURL(base *url.URL, href string) string {
 		return ""
 	}
 	return base.ResolveReference(relativeURL).String()
+}
+
+// discoverCommonFeedURLs 尝试常见 RSS/Atom 地址作为兜底方案
+func discoverCommonFeedURLs(base *url.URL) []string {
+	if base == nil {
+		return nil
+	}
+
+	root := &url.URL{
+		Scheme: base.Scheme,
+		Host:   base.Host,
+	}
+	candidates := []string{
+		"/atom.xml",
+		"/rss.xml",
+		"/feed",
+		"/feed.xml",
+		"/index.xml",
+		"/rss",
+		"/atom",
+		"/feeds/posts/default?alt=rss",
+	}
+
+	found := make([]string, 0)
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		abs := toAbsoluteURL(root, candidate)
+		if abs == "" {
+			continue
+		}
+		if _, ok := seen[abs]; ok {
+			continue
+		}
+		if isValidFeedURL(abs) {
+			found = append(found, abs)
+			seen[abs] = struct{}{}
+		}
+	}
+	return found
+}
+
+func isValidFeedURL(feedURL string) bool {
+	fp := newRssParser()
+	feed, err := fp.ParseURL(feedURL)
+	if err != nil || feed == nil {
+		return false
+	}
+	return true
 }

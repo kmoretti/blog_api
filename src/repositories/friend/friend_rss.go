@@ -22,9 +22,17 @@ func QueryFriendRss(db *gorm.DB, opts model.FriendRssQueryOptions) (model.QueryF
 				Joins("JOIN friend_link ON friend_link.id = friend_rss.friend_link_id").
 				Where("friend_link.is_died = ?", false).
 				Where("friend_link.status != ?", "ignored").
+				Where("friend_rss.is_died = ?", false).
 				Where("friend_rss.status != ?", "pause")
 		} else {
 			query = query.Where("status = ?", opts.Status)
+		}
+	}
+	if opts.IsDied != nil {
+		if opts.Status == "valid" {
+			query = query.Where("friend_rss.is_died = ?", *opts.IsDied)
+		} else {
+			query = query.Where("is_died = ?", *opts.IsDied)
 		}
 	}
 
@@ -66,7 +74,9 @@ func CreateFriendRssFeeds(db *gorm.DB, friendLinkID int, rssURL string, name str
 		FriendLinkID: friendLinkID,
 		RssURL:       rssURL,
 		Name:         name,
+		Times:        0,
 		Status:       "survival",
+		IsDied:       false,
 	}
 	if err := db.Create(&newRSS).Error; err != nil {
 		log.Printf("Failed to insert RSS feed '%s' for friend link ID %d: %v", rssURL, friendLinkID, err)
@@ -152,6 +162,7 @@ func UpdateFriendRssByID(db *gorm.DB, id uint, req model.EditFriendRssReq) (int6
 		"rss_url":        true,
 		"status":         true,
 		"friend_link_id": true,
+		"is_died":        true,
 	}
 
 	updates := make(map[string]interface{})
@@ -160,7 +171,6 @@ func UpdateFriendRssByID(db *gorm.DB, id uint, req model.EditFriendRssReq) (int6
 			updates[col] = val
 		}
 	}
-
 	if len(updates) == 0 {
 		log.Println("[db][friend_rss] No valid fields to update after filtering.")
 		return 0, nil

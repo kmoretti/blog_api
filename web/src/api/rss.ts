@@ -45,6 +45,26 @@ export const getPostsByFeed = (
 }
 
 /**
+ * Fetches posts from all RSS feeds.
+ * Corresponds to GET /api/public/rss
+ * @param page - The page number for pagination.
+ * @param pageSize - The number of items per page.
+ */
+export const getAllPosts = (
+  page = 1,
+  pageSize = 20
+): Promise<ApiResponse<PaginatedResponse<RssPost>>> => {
+  return request({
+    url: '/public/rss',
+    method: 'get',
+    params: {
+      page,
+      page_size: pageSize
+    }
+  })
+}
+
+/**
  * Deletes one or more RSS feeds by their IDs.
  * Corresponds to DELETE /api/action/rss
  * @param ids - An array of RSS feed IDs to delete.
@@ -64,7 +84,7 @@ export const deleteRssFeed = (ids: number[]): Promise<ApiResponse> => {
  */
 export const updateRssFeed = (
   id: number,
-  data: { name?: string; rss_url?: string; status?: string }
+  data: { name?: string; rss_url?: string; status?: string; is_died?: boolean }
 ): Promise<ApiResponse> => {
   return request({
     url: `/action/rss/${id}`,

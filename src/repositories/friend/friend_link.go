@@ -150,18 +150,21 @@ func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error
 
 // UpdateFriendLink updates the details of a friend link after crawling.
 func UpdateFriendLink(db *gorm.DB, link model.FriendWebsite, result model.CrawlResult) error {
-	if result.Status == "survival" {
-		link.Times = 0 // Reset times on success
+	success := result.Status == "survival"
+	var reachedThreshold bool
+	link.Times, link.Status, reachedThreshold = model.ComputeFailureState(
+		link.Times,
+		success,
+		4,
+		"survival",
+		result.Status,
+		"",
+	)
+	if success {
 		link.IsDied = false
-	} else {
-		link.Times++
-	}
-
-	if link.Times >= 4 {
+	} else if reachedThreshold {
 		link.IsDied = true
 	}
-
-	link.Status = result.Status
 
 	if result.RedirectURL != "" {
 		link.Link = result.RedirectURL

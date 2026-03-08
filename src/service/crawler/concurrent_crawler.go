@@ -95,8 +95,8 @@ func ParseRssFeedsConcurrently(feeds []model.FriendRss, parseFunc func(friendRss
 
 	activeFeeds := make([]model.FriendRss, 0, len(feeds))
 	for _, feed := range feeds {
-		if feed.Status == "pause" {
-			log.Printf("[ConcurrentCrawler] 跳过已暂停的 RSS 订阅源: %s", feed.RssURL)
+		if feed.Status == "pause" || feed.IsDied {
+			log.Printf("[ConcurrentCrawler] 跳过状态为 %s, is_died=%t 的 RSS 订阅源: %s", feed.Status, feed.IsDied, feed.RssURL)
 			continue
 		}
 		activeFeeds = append(activeFeeds, feed)
