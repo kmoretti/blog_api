@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS images (
     updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
+CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);
+
 -- 为 images 表创建触发器, 用于自动更新 updated_at
 CREATE TRIGGER IF NOT EXISTS trg_images_updated_at
 AFTER UPDATE ON images

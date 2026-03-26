@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS friend_rss (
 
 -- 创建索引优化
 CREATE INDEX IF NOT EXISTS idx_friend_rss_friend_link_id ON friend_rss(friend_link_id);
+CREATE INDEX IF NOT EXISTS idx_friend_rss_friend_link_id_rss_url ON friend_rss(friend_link_id, rss_url);
 CREATE INDEX IF NOT EXISTS idx_friend_rss_status ON friend_rss(status);
 CREATE INDEX IF NOT EXISTS idx_friend_rss_times ON friend_rss(times);
 CREATE INDEX IF NOT EXISTS idx_friend_rss_is_died ON friend_rss(is_died);
