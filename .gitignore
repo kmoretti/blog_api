@@ -48,6 +48,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+.codex
 
 # data file
 data/

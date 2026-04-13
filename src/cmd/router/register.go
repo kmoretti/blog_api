@@ -44,7 +44,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	{
 		verifyGroup := apiGroup.Group("/verify")
 		{
-			verifyGroup.POST("/passwd", authHandlerInstance.Login)
+			verifyGroup.POST("/passwd", middleware.TurnstileVerify(), authHandlerInstance.Login)
 			verifyGroup.POST("/email", middleware.AntiBotAuth(), verifyHandler.SendEmailCode)
 			verifyGroup.POST("/turnstile", middleware.TurnstileVerify(), verifyHandler.IssueVerifyToken)
 			verifyGroup.POST("/fingerprint", middleware.AntiBotAuth(), fingerprintHandler.CreateFingerprint)
