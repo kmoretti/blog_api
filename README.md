@@ -55,22 +55,22 @@ npm run build
 ## 关键接口（示例）
 
 - 公共接口：
-- `GET /api/public/moments/`
-- `GET /api/public/rss/`
-- `GET /api/public/friend/`
-- `GET /api/public/image/*id`
+  - `GET /api/public/moments/`
+  - `GET /api/public/rss/`
+  - `GET /api/public/friend/`
+  - `GET /api/public/image/*id`
 
 - 管理接口（JWT）：
-- `GET /api/action/moments`
-- `POST /api/action/rss`
-- `POST /api/action/image`
-- `POST /api/action/resource/local`
+  - `GET /api/action/moments`
+  - `POST /api/action/rss`
+  - `POST /api/action/image`
+  - `POST /api/action/resource/local`
 
 - 认证相关：
-- `POST /api/verify/passwd`
-- `POST /api/verify/email`
-- `POST /api/verify/turnstile`
-- `POST /api/verify/fingerprint`
+  - `POST /api/verify/passwd`
+  - `POST /api/verify/email`
+  - `POST /api/verify/turnstile`
+  - `POST /api/verify/fingerprint`
 
 ## 目录结构（简版）
 
