@@ -47,36 +47,22 @@ func CrawlWebsite(url string) model.CrawlResult {
 		log.Printf("[crawler]错误: %s 的状态码非 200: %d", url, resp.StatusCode)
 		return model.CrawlResult{Status: "error"}
 	}
-
-	// 读取响应体内容
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("[crawler]读取 %s 的响应体时出错: %v", url, err)
 		return model.CrawlResult{Status: "error"}
 	}
-	// 重置响应体以便后续读取
 	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-	// 确定编码
-	e, name, _ := charset.DetermineEncoding(bodyBytes, resp.Header.Get("Content-Type"))
-	log.Printf("[crawler]确定 %s 的编码为: %s", url, name)
-
-	// 使用检测到的编码创建读取器
+	e, _, _ := charset.DetermineEncoding(bodyBytes, resp.Header.Get("Content-Type"))
 	utf8Reader := e.NewDecoder().Reader(bytes.NewBuffer(bodyBytes))
-
 	doc, err := goquery.NewDocumentFromReader(utf8Reader)
 	if err != nil {
 		log.Printf("[crawler]解析 %s 的 HTML 时出错: %v", url, err)
 		return model.CrawlResult{Status: "error"}
 	}
-
-	// 查找描述
 	description := doc.Find("meta[name='description']").AttrOr("content", "")
-
-	// 查找网站图标
 	iconURL, exists := doc.Find("link[rel='icon']").Attr("href")
 	if !exists {
-		// 兼容 apple-touch-icon 或 shortcut icon
 		iconURL, exists = doc.Find("link[rel='apple-touch-icon']").Attr("href")
 		if !exists {
 			iconURL = doc.Find("link[rel='shortcut icon']").AttrOr("href", "")
