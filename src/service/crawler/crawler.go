@@ -14,12 +14,11 @@ import (
 	"golang.org/x/net/html/charset"
 )
 
-// CrawlWebsite 获取并解析网站以提取 SEO 信息
 func CrawlWebsite(url string) model.CrawlResult {
 	client := &http.Client{
-		Timeout: 10 * time.Second, // 设置超时以防止挂起
+		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse // 不跟随重定向
+			return http.ErrUseLastResponse
 		},
 	}
 

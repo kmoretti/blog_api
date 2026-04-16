@@ -23,14 +23,12 @@ func NewImagePublicHandler(db *gorm.DB) *ImagePublicHandler {
 	return &ImagePublicHandler{db: db}
 }
 
-// GetImage 根据ID获取图片信息或随机获取图片
 func (h *ImagePublicHandler) GetImage(c *gin.Context) {
 	idStr := c.Param("id")
 	var image *model.Image
 	var err error
 
 	if idStr == "" || idStr == "/" {
-		// 如果没有提供ID，则随机获取一张图片
 		image, err = imageRepositories.GetRandomImage(h.db)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -42,7 +40,6 @@ func (h *ImagePublicHandler) GetImage(c *gin.Context) {
 			return
 		}
 	} else {
-		// 如果提供了ID，则解析并获取指定的图片
 		id, errConv := strconv.Atoi(idStr)
 		if errConv != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的图片ID"})
@@ -61,11 +58,8 @@ func (h *ImagePublicHandler) GetImage(c *gin.Context) {
 		}
 	}
 
-	// 检查查询参数 `type`
 	queryType := c.DefaultQuery("type", "image")
-
 	if queryType == "metadata" {
-		// 如果 type=metadata，返回图片的元数据
 		c.JSON(http.StatusOK, image)
 	} else {
 		c.Redirect(http.StatusFound, image.URL)
