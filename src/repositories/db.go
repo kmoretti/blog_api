@@ -52,7 +52,6 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("could not connect to database via gorm: %w", err)
 	}
 
-	// Run migrations
 	migrationFiles, err := filepath.Glob("migrations/*.sql")
 	if err != nil {
 		return nil, fmt.Errorf("could not find migration files: %w", err)
@@ -60,7 +59,7 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 	sort.Strings(migrationFiles)
 
 	for _, file := range migrationFiles {
-		log.Printf("运行迁移: %s\n", file)
+		log.Printf("[Repo]运行迁移: %s\n", file)
 		content, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("could not read migration file %s: %w", file, err)

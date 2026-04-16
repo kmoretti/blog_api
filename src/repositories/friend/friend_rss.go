@@ -13,18 +13,21 @@ func QueryFriendRss(db *gorm.DB, opts model.FriendRssQueryOptions) (model.QueryF
 	var resp model.QueryFriendRssResponse
 	query := db.Model(&model.FriendRss{})
 
-	if opts.FriendLinkID > 0 {
-		query = query.Where("friend_link_id = ?", opts.FriendLinkID)
-	}
-	if opts.Status != "" {
-		if opts.Status == "valid" {
-			query = db.Table("friend_rss").
-				Joins("JOIN friend_link ON friend_link.id = friend_rss.friend_link_id").
-				Where("friend_link.is_died = ?", false).
-				Where("friend_link.status != ?", "ignored").
-				Where("friend_rss.is_died = ?", false).
-				Where("friend_rss.status != ?", "pause")
-		} else {
+	if opts.Status != "" && opts.Status == "valid" {
+		query = db.Table("friend_rss").
+			Joins("JOIN friend_link ON friend_link.id = friend_rss.friend_link_id").
+			Where("friend_link.is_died = ?", false).
+			Where("friend_link.status != ?", "ignored").
+			Where("friend_rss.is_died = ?", false).
+			Where("friend_rss.status != ?", "pause")
+		if opts.FriendLinkID > 0 {
+			query = query.Where("friend_rss.friend_link_id = ?", opts.FriendLinkID)
+		}
+	} else {
+		if opts.FriendLinkID > 0 {
+			query = query.Where("friend_link_id = ?", opts.FriendLinkID)
+		}
+		if opts.Status != "" {
 			query = query.Where("status = ?", opts.Status)
 		}
 	}
@@ -63,8 +66,8 @@ func CreateFriendRssFeeds(db *gorm.DB, friendLinkID int, rssURL string, name str
 	var existing model.FriendRss
 	err := db.Where("friend_link_id = ? AND rss_url = ?", friendLinkID, rssURL).First(&existing).Error
 	if err == nil {
-		log.Printf("RSS feed '%s' already exists for friend link ID %d, skipping.", rssURL, friendLinkID)
-		return nil, nil
+		log.Printf("RSS feed '%s' already exists for friend link ID %d, returning existing record.", rssURL, friendLinkID)
+		return &existing, nil
 	}
 	if err != gorm.ErrRecordNotFound {
 		return nil, fmt.Errorf("failed to check for existing RSS feed: %w", err)
@@ -176,20 +179,12 @@ func UpdateFriendRssByID(db *gorm.DB, id uint, req model.EditFriendRssReq) (int6
 		return 0, nil
 	}
 
-	var rowsAffected int64
-	err := db.Transaction(func(tx *gorm.DB) error {
-		// Perform the update
-		result := tx.Model(&model.FriendRss{}).Where("id = ?", id).Updates(updates)
-		if result.Error != nil {
-			return fmt.Errorf("could not execute update for friend_rss id %d: %w", id, result.Error)
-		}
-		rowsAffected = result.RowsAffected
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
+	result := db.Model(&model.FriendRss{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return 0, fmt.Errorf("could not execute update for friend_rss id %d: %w", id, result.Error)
 	}
+
+	rowsAffected := result.RowsAffected
 
 	log.Printf("[db][friend_rss] Updated friend_rss with ID: %d. Rows affected: %d", id, rowsAffected)
 	return rowsAffected, nil

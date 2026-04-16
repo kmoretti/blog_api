@@ -31,31 +31,27 @@ func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 	log.Println("[db][friend][init]Start inserting friend links...")
 
 	for _, link := range friendLinks {
-		var exists bool
-		err := db.Model(&model.FriendWebsite{}).Select("count(*) > 0").Where("website_url = ?", link.Link).Find(&exists).Error
-		if err != nil {
-			log.Printf("[db][friend][ERR]无法检查已存在的链接 %s: %v", link.Link, err)
-			continue // Or return error, depending on desired strictness
+		newLink := model.FriendWebsite{
+			Name:      link.Name,
+			Link:      link.Link,
+			Avatar:    link.Avatar,
+			Info:      link.Info,
+			Status:    "survival",
+			EnableRss: true,
 		}
 
-		if !exists {
-			newLink := model.FriendWebsite{
-				Name:      link.Name,
-				Link:      link.Link,
-				Avatar:    link.Avatar,
-				Info:      link.Info,
-				Status:    "survival",
-				EnableRss: true,
-			}
-			if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&newLink).Error; err != nil {
-				log.Printf("[db][friend][ERR]无法插入友链 %s: %v", link.Name, err)
-				// Decide if one failure should stop the whole process
-			} else {
-				log.Printf("[db][friend][init]已插入友链: %s", link.Name)
-			}
-		} else {
-			log.Printf("[db][friend][init]友链 %s 已存在，跳过", link.Name)
+		result := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&newLink)
+		if result.Error != nil {
+			log.Printf("[db][friend][ERR]无法插入友链 %s: %v", link.Name, result.Error)
+			continue
 		}
+
+		if result.RowsAffected == 0 {
+			log.Printf("[db][friend][init]友链 %s 已存在，跳过", link.Name)
+			continue
+		}
+
+		log.Printf("[db][friend][init]已插入友链: %s", link.Name)
 	}
 
 	log.Println("[db][friend][init]Friend links insertion process completed.")
@@ -65,37 +61,42 @@ func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 // QueryFriendLinks provides a unified interface for querying friend links.
 func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.QueryFriendLinksResponse, error) {
 	var resp model.QueryFriendLinksResponse
-	query := db.Model(&model.FriendWebsite{})
+	baseQuery := db.Model(&model.FriendWebsite{})
 
 	// Apply status filters
 	if opts.Status != "" {
-		query = query.Where("status = ?", opts.Status)
+		baseQuery = baseQuery.Where("status = ?", opts.Status)
 	}
 	if len(opts.Statuses) > 0 {
 		if opts.NotIn {
-			query = query.Where("status NOT IN ?", opts.Statuses)
+			baseQuery = baseQuery.Where("status NOT IN ?", opts.Statuses)
 		} else {
-			query = query.Where("status IN ?", opts.Statuses)
+			baseQuery = baseQuery.Where("status IN ?", opts.Statuses)
 		}
 	}
 
 	if opts.IsDied != nil {
-		query = query.Where("is_died = ?", *opts.IsDied)
+		baseQuery = baseQuery.Where("is_died = ?", *opts.IsDied)
 	}
 
 	// Apply search filter
 	if opts.Search != "" {
 		searchPattern := "%" + opts.Search + "%"
-		query = query.Where("website_name LIKE ? OR website_url LIKE ? OR description LIKE ?", searchPattern, searchPattern, searchPattern)
+		baseQuery = baseQuery.Where("website_name LIKE ? OR website_url LIKE ? OR description LIKE ?", searchPattern, searchPattern, searchPattern)
 	}
 
-	// Handle count-only query
 	if opts.Count {
-		if err := query.Count(&resp.Count).Error; err != nil {
+		if err := baseQuery.Count(&resp.Count).Error; err != nil {
 			return resp, fmt.Errorf("could not count friend links: %w", err)
 		}
 		return resp, nil
 	}
+
+	if err := baseQuery.Count(&resp.Count).Error; err != nil {
+		return resp, fmt.Errorf("could not count friend links for pagination: %w", err)
+	}
+
+	query := baseQuery.Order("updated_at DESC")
 
 	// Apply pagination and ordering
 	if opts.Limit > 0 {
@@ -104,17 +105,9 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.Offset > 0 {
 		query = query.Offset(opts.Offset)
 	}
-	query = query.Order("updated_at DESC")
-
-	// Select specific fields for the final query
 	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
 		return resp, fmt.Errorf("could not query friend links: %w", err)
-	}
-
-	// If a count is also needed along with the data
-	if err := query.Limit(-1).Offset(-1).Count(&resp.Count).Error; err != nil {
-		return resp, fmt.Errorf("could not count friend links for pagination: %w", err)
 	}
 
 	return resp, nil
@@ -220,7 +213,7 @@ func DeleteFriendLinkByID(db *gorm.DB, id uint) (model.FriendWebsite, error) {
 			return fmt.Errorf("could not query friend link for deletion: %w", err)
 		}
 
-		res := tx.Where("id = ?", id).Delete(&model.FriendWebsite{})
+		res := tx.Delete(&deletedLink)
 		if res.Error != nil {
 			return fmt.Errorf("could not delete friend link: %w", res.Error)
 		}

@@ -6,22 +6,22 @@ import (
 	"log"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // InsertRssPost inserts a new post into the database, avoiding duplicates.
 func InsertRssPost(db *gorm.DB, post *model.RssPost) error {
-	var count int64
-	if err := db.Model(&model.RssPost{}).Where("link = ?", post.Link).Count(&count).Error; err != nil {
-		return fmt.Errorf("could not check for existing post: %w", err)
+	result := db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "link"}},
+		DoNothing: true,
+	}).Create(post)
+	if result.Error != nil {
+		return fmt.Errorf("could not insert post: %w", result.Error)
 	}
 
-	if count > 0 {
+	if result.RowsAffected == 0 {
 		log.Printf("链接为 %s 的文章已存在，跳过", post.Link)
 		return nil
-	}
-
-	if err := db.Create(post).Error; err != nil {
-		return fmt.Errorf("could not insert post: %w", err)
 	}
 
 	log.Printf("已插入新文章: %s", post.Title)
@@ -33,31 +33,27 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 	var posts []model.RssPost
 	var total int64
 
-	tx := db.Table("friend_rss_post AS p").Select("p.id, p.rss_id, p.title, p.link, p.description, p.author, p.time")
+	baseTx := db.Table("friend_rss_post AS p")
 	if query.FriendLinkID != nil {
-		tx = tx.Joins("JOIN friend_rss r ON p.rss_id = r.id").Where("r.friend_link_id = ?", *query.FriendLinkID)
+		baseTx = baseTx.Joins("JOIN friend_rss r ON p.rss_id = r.id").Where("r.friend_link_id = ?", *query.FriendLinkID)
 	}
 	if query.RssID != nil {
-		tx = tx.Where("p.rss_id = ?", *query.RssID)
+		baseTx = baseTx.Where("p.rss_id = ?", *query.RssID)
 	}
 
-	// Count total records
-	countTx := tx
-	if err := countTx.Count(&total).Error; err != nil {
+	if err := baseTx.Session(&gorm.Session{NewDB: true}).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("could not query total posts count: %w", err)
 	}
 
-	// Handle pagination
+	dataTx := baseTx.Select("p.id, p.rss_id, p.title, p.link, p.description, p.author, p.time")
 	if query.Page > 0 && query.PageSize > 0 {
 		offset := (query.Page - 1) * query.PageSize
-		tx = tx.Limit(query.PageSize).Offset(offset)
+		dataTx = dataTx.Limit(query.PageSize).Offset(offset)
 	}
 
-	if err := tx.Order("p.time DESC").Scan(&posts).Error; err != nil {
+	if err := dataTx.Order("p.time DESC").Scan(&posts).Error; err != nil {
 		return nil, 0, fmt.Errorf("could not query posts: %w", err)
 	}
-
-	// Ensure time is not negative
 	for i := range posts {
 		if posts[i].Time < 0 {
 			posts[i].Time = 0
