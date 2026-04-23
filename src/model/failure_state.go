@@ -12,11 +12,9 @@ func ComputeFailureState(
 	if threshold <= 0 {
 		threshold = 1
 	}
-
 	if success {
 		return 0, successStatus, false
 	}
-
 	times = currentTimes + 1
 	status = failureStatus
 	reachedThreshold = times >= threshold

@@ -26,3 +26,11 @@ export const getSystemConfig = () => {
 export const updateSystemConfig = (updates: { key: string; value: any }[]) => {
   return request.put<any, ApiResponse<{ message: string }>>('/action/config', updates);
 };
+
+/**
+ * 请求重启后端进程。
+ * 实际拉起由外部守护进程负责。
+ */
+export const restartSystem = () => {
+  return request.post<any, ApiResponse<{ detail: string }>>('/action/system/restart');
+};

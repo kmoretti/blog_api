@@ -38,6 +38,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	mediaHandler := handlerAction.NewMediaHandler(db)
 	configHandler := handlerAction.NewConfigHandler()
 	fingerprintHandler := authHandler.NewFingerprintHandler(db)
+	systemHandler := handlerAction.NewSystemHandler()
 
 	// API routes
 	apiGroup := router.Group("/api")
@@ -99,6 +100,10 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 				resourceActionGroup.DELETE("/oss/*file_path", resourceHandler.DeleteResourceOSS)
 			}
 			actionGroup.PUT("/config", configHandler.UpdateConfig)
+			systemActionGroup := actionGroup.Group("/system")
+			{
+				systemActionGroup.POST("/restart", systemHandler.Restart)
+			}
 			momentsActionGroup := actionGroup.Group("/moments")
 			{
 				momentsActionGroup.GET("", momentActionHandler.GetMoments)

@@ -355,7 +355,7 @@
                 <el-select v-model="config.system_conf.oss_conf.provider" placeholder="选择 OSS 提供商">
                   <el-option label="阿里云" value="aliyun" />
                   <el-option label="腾讯云 (暂未支持)" value="tencent" disabled />
-                  <el-option label="AWS S3 (暂未支持)" value="s3" disabled />
+                  <el-option label="AWS S3" value="s3" />
                 </el-select>
                 <div class="form-item-help">选择您的对象存储服务提供商。</div>
               </el-form-item>
@@ -406,6 +406,19 @@
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="危险区域" name="danger">
+          <div class="danger-zone">
+            <div class="danger-zone__content">
+              <div class="danger-zone__title">重启后端服务</div>
+              <div class="danger-zone__desc">
+                这会让当前后端进程主动退出，并依赖外部自启动机制重新拉起。请先确认已配置好自动重启。
+              </div>
+            </div>
+            <el-button type="danger" :loading="restarting" @click="handleRestart">
+              重启服务
+            </el-button>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </el-card>
   </div>
@@ -413,12 +426,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getSystemConfig, updateSystemConfig } from '@/api/config'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getSystemConfig, restartSystem, updateSystemConfig } from '@/api/config'
 import type { SystemConfig } from '@/model/config'
 
 const activeTab = ref('safe')
 const saving = ref(false)
+const restarting = ref(false)
 const newCorsHost = ref('')
 const newExcludePath = ref('')
 const newAllowExtension = ref('')
@@ -707,6 +721,36 @@ const saveConfig = async () => {
     saving.value = false
   }
 }
+
+const handleRestart = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确认重启后端服务吗？当前进程会主动退出，并等待外部自启动拉起。',
+      '危险操作',
+      {
+        confirmButtonText: '确认重启',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+  } catch {
+    return
+  }
+
+  restarting.value = true
+  try {
+    const res = await restartSystem()
+    ElMessage.success(res.message || '已发送重启请求，请等待服务重新上线')
+  } catch (error) {
+    ElMessage.error('发送重启请求失败')
+    console.error(error)
+  } finally {
+    window.setTimeout(() => {
+      restarting.value = false
+    }, 3000)
+  }
+}
 </script>
 
 <style scoped>
@@ -759,5 +803,34 @@ const saveConfig = async () => {
   max-height: 65vh;
   overflow-y: auto;
   padding-right: 15px; /* 为滚动条留出空间，防止内容跳动 */
+}
+
+.danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  margin-top: 8px;
+  border: 1px solid #f56c6c;
+  border-radius: 8px;
+  background: #fef0f0;
+}
+
+.danger-zone__content {
+  min-width: 0;
+}
+
+.danger-zone__title {
+  color: #c45656;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.danger-zone__desc {
+  margin-top: 6px;
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.5;
 }
 </style>

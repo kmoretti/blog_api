@@ -11,7 +11,6 @@ import (
 // ConfigHandler 处理与配置相关的请求
 type ConfigHandler struct{}
 
-// NewConfigHandler 创建一个新的 ConfigHandler
 func NewConfigHandler() *ConfigHandler {
 	return &ConfigHandler{}
 }
@@ -23,13 +22,12 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "无效的请求体,请传入一个数组: "+err.Error()))
 		return
 	}
-
 	if err := config.UpdateAndSaveConfigs(req); err != nil {
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "更新配置失败: "+err.Error()))
 		return
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{
-		"message": "配置更新成功",
+		"message": "配置更新成功，重启服务后生效",
 	}))
 }

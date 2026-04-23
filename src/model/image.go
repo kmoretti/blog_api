@@ -11,12 +11,10 @@ type Image struct {
 	Status    string `json:"status" gorm:"column:status"`
 }
 
-// TableName sets the insert table name for this struct type.
 func (Image) TableName() string {
 	return "images"
 }
 
-// QueryImageResponse 定义了查询图片结果的结构
 type QueryImageResponse struct {
 	Images []Image
 	Total  int64
