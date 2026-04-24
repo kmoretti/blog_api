@@ -41,7 +41,7 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 		baseTx = baseTx.Where("p.rss_id = ?", *query.RssID)
 	}
 
-	if err := baseTx.Session(&gorm.Session{NewDB: true}).Count(&total).Error; err != nil {
+	if err := baseTx.Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("could not query total posts count: %w", err)
 	}
 
