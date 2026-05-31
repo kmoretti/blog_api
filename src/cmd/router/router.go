@@ -3,6 +3,7 @@ package cmd
 import (
 	"blog_api/src/model"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -32,7 +33,9 @@ func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engin
 	}))
 
 	registerRoutes(router, db, cfg, startTime)
-	pprof.Register(router)
+	if os.Getenv("PPROF_ENABLED") == "true" {
+		pprof.Register(router)
+	}
 	router.NoRoute(staticFileHandler(cfg))
 	return router
 }
