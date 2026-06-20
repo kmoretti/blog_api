@@ -28,6 +28,7 @@ type telegramListener struct {
 	filterUserIDs   map[int64]bool
 	ossService      oss.OSSService
 	pendingGroups   map[string]*telegramMediaGroup
+	startTime       int64 // Unix timestamp, 只接受此时间之后的消息
 }
 
 type telegramMediaGroup struct {
@@ -53,6 +54,10 @@ func StartTelegramListener(db *gorm.DB, cfg *model.Config) {
 		bot:           bot,
 		filterUserIDs: make(map[int64]bool),
 		pendingGroups: make(map[string]*telegramMediaGroup),
+		startTime:     tgCfg.StartTime,
+	}
+	if listener.startTime == 0 {
+		listener.startTime = time.Now().Unix()
 	}
 
 	for _, id := range tgCfg.FilterUserid {
@@ -132,6 +137,16 @@ func (l *telegramListener) handleUpdate(update tgbotapi.Update) {
 }
 
 func (l *telegramListener) isValidMessage(msg *tgbotapi.Message) bool {
+	// 剔除贴纸（表情包）
+	if msg.Sticker != nil {
+		return false
+	}
+
+	// 只接受 startTime 之后的消息
+	if l.startTime > 0 && int64(msg.Date) < l.startTime {
+		return false
+	}
+
 	if l.channelID != 0 && msg.Chat.ID != l.channelID {
 		return false
 	}

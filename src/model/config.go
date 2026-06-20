@@ -120,6 +120,7 @@ type TelegramConfig struct {
 	BotToken     string   `mapstructure:"bot_token"`
 	ChannelID    string   `mapstructure:"channel_id"`
 	FilterUserid []string `mapstructure:"filter_userid"`
+	StartTime    int64    `mapstructure:"start_time"` // Unix timestamp, 只接受此时间之后的消息（0 表示使用 bot 启动时间）
 }
 
 // EmailConf 邮箱配置

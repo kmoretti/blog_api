@@ -48,7 +48,8 @@
           "bot_token": "",
           "channel_id": "",
           "media_path": "telegram",
-          "filter_userid": []
+          "filter_userid": [],
+          "start_time": 0
         },
         "discord": {
           "enable": false,
