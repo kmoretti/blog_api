@@ -32,7 +32,7 @@
           />
         </el-form-item>
 
-        <el-form-item v-if="turnstileEnabled">
+        <el-form-item v-if="turnstileEnabled" label-width="0">
           <div class="turnstile-wrap">
             <div id="turnstile-widget"></div>
           </div>
