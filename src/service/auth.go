@@ -57,8 +57,6 @@ func resolveExpectedCredentials() {
 			expectedUsername = cfg.WebPanelUser
 			expectedPassword = cfg.WebPanelPwd
 		}
-
-		// 兼容配置尚未初始化的场景
 		if expectedUsername == "" {
 			expectedUsername = os.Getenv("WEB_PANEL_USER")
 		}

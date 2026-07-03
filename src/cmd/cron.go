@@ -107,12 +107,9 @@ func RunDiedFriendLinkCheckJob(db *gorm.DB) {
 
 	// 使用并发爬虫
 	results := crawlerService.CrawlWebsitesConcurrently(links)
-
-	// 处理爬取结果
 	for _, crawlResult := range results {
 		link := crawlResult.Link
 		result := crawlResult.Result
-		// 如果链接仍然有效，状态将更新为"存活"并重置计数
 		err := friendsRepositories.UpdateFriendLink(db, link, result)
 		if err != nil {
 			log.Printf("[Cron] 在 cron 任务中更新失效友链 %s 失败: %v", link.Name, err)
@@ -190,11 +187,6 @@ func scheduleImageCheckEvery48h(db *gorm.DB) {
 func StartCronJobs(db *gorm.DB) {
 	c := cron.New()
 
-	// 安排友链爬取任务每 6 小时运行一次
-	c.AddFunc("0 */6 * * *", func() {
-		RunFriendLinkCrawlerJob(db)
-	})
-
 	// 安排慢检查任务从下一天 0 点开始，每 48 小时运行一次
 	scheduleDiedCheckEvery48h(db)
 	scheduleImageCheckEvery48h(db)
@@ -203,6 +195,11 @@ func StartCronJobs(db *gorm.DB) {
 	c.AddFunc("0 */3 * * *", func() {
 		RunRssParserJob(db)
 	})
+	// 安排友链爬取任务每 6 小时运行一次
+	c.AddFunc("0 */6 * * *", func() {
+		RunFriendLinkCrawlerJob(db)
+	})
+
 	// 如果配置了启动时扫描，则立即运行一次任务
 	if config.GetConfig().CronScanOnStartup {
 		go func() {

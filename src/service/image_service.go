@@ -103,16 +103,11 @@ func processSingleImage(filePath, rootPath, targetFormat string) (*processedImag
 		return nil, err
 	}
 	originalURL := filepath.ToSlash(filepath.Join("/image", originalRelPath))
-
 	finalPath := filePath
 
-	// 判断是否需要转换：
-	// 1. 配置了目标格式
-	// 2. 当前文件格式与目标格式不同
 	if targetFormat != "" && ext != "."+targetFormat {
 		newPath := strings.TrimSuffix(filePath, ext) + "." + targetFormat
 
-		// 检查目标文件是否已存在，不存在才进行转换
 		if _, err := os.Stat(newPath); os.IsNotExist(err) {
 			if err := convertImage(filePath, newPath, targetFormat); err != nil {
 				log.Printf("[service][image][WARN] Failed to convert %s: %v", filePath, err)
@@ -120,7 +115,6 @@ func processSingleImage(filePath, rootPath, targetFormat string) (*processedImag
 			}
 			log.Printf("[service][image] Converted %s to %s", filePath, newPath)
 
-			// 转换成功后，删除原文件
 			if err := os.Remove(filePath); err != nil {
 				log.Printf("[service][image][WARN] Failed to remove original file %s: %v", filePath, err)
 			} else {
@@ -177,14 +171,11 @@ func convertImage(srcPath, destPath, targetFormat string) error {
 	}
 	defer destFile.Close()
 
-	// 特殊处理：如果目标是 webp，我们选择直接复制而不是重新编码
-	// 这样可以避免潜在的质量损失，且速度更快
 	if targetFormat == "webp" {
 		_, err := io.Copy(destFile, srcFile)
 		return err
 	}
 
-	// 其他格式则进行解码和重新编码
 	img, _, err := image.Decode(srcFile)
 	if err != nil {
 		return fmt.Errorf("could not decode image: %w", err)
