@@ -91,6 +91,7 @@ func unmarshalConfig(cfg *model.Config) error {
 	cfg.ListenAddress = v.GetString("LISTEN_ADDRESS")
 	cfg.WebPanelUser = v.GetString("WEB_PANEL_USER")
 	cfg.WebPanelPwd = v.GetString("WEB_PANEL_PWD")
+	cfg.StateAPIMasterPassword = v.GetString("STATE_API_MASTER_PASSWORD")
 	cfg.ConfigPath = v.GetString("CONFIG_PATH")
 	cfg.CronScanOnStartup = v.GetBool("CRON_SCAN_ON_STARTUP")
 	cfg.IsDev = parseEnvBool(v.GetString("IS_DEV"))

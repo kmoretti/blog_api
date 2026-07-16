@@ -7,29 +7,14 @@
         </div>
       </template>
 
-      <el-form
-        ref="formRef"
-        :model="loginForm"
-        :rules="rules"
-        label-width="80px"
-        @submit.prevent="handleLogin"
-      >
+      <el-form ref="formRef" :model="loginForm" :rules="rules" label-width="80px" @submit.prevent="handleLogin">
         <el-form-item label="用户名" prop="username">
-          <el-input
-            v-model="loginForm.username"
-            placeholder="请输入用户名"
-            clearable
-          />
+          <el-input v-model="loginForm.username" placeholder="请输入用户名" clearable />
         </el-form-item>
 
         <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="loginForm.password"
-            type="password"
-            placeholder="请输入密码"
-            show-password
-            @keyup.enter="handleLogin"
-          />
+          <el-input v-model="loginForm.password" type="password" placeholder="请输入密码" show-password
+            @keyup.enter="handleLogin" />
         </el-form-item>
 
         <el-form-item v-if="turnstileEnabled" label-width="0">
@@ -39,12 +24,7 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            :loading="loading"
-            style="width: 100%"
-            @click="handleLogin"
-          >
+          <el-button type="primary" :loading="loading" style="width: 100%" @click="handleLogin">
             登录
           </el-button>
         </el-form-item>
@@ -229,8 +209,10 @@ const handleForgotPassword = () => {
 .login-card {
   width: 400px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  background-color: rgba(255, 255, 255, 0.85); /* Semi-transparent background */
-  backdrop-filter: blur(10px); /* Frosted glass effect */
+  background-color: rgba(255, 255, 255, 0.85);
+  /* Semi-transparent background */
+  backdrop-filter: blur(10px);
+  /* Frosted glass effect */
   border-radius: 12px;
   padding: 1rem;
 }

@@ -43,6 +43,11 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	// API routes
 	apiGroup := router.Group("/api")
 	{
+		if cfg.StateAPIMasterPassword != "" {
+			registerStateRoutes(apiGroup, cfg.StateAPIMasterPassword)
+		} else {
+			log.Print("[state] STATE_API_MASTER_PASSWORD is empty; in-memory state API is disabled")
+		}
 		verifyGroup := apiGroup.Group("/verify")
 		{
 			verifyGroup.POST("/passwd", middleware.TurnstileVerify(), authHandlerInstance.Login)
