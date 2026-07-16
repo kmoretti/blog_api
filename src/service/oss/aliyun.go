@@ -2,8 +2,8 @@ package oss
 
 import (
 	"blog_api/src/model"
+	"context"
 	"fmt"
-	"mime/multipart"
 	"net/url"
 	"strings"
 
@@ -28,8 +28,8 @@ func NewAliyunOSSService(cfg *model.OSSConfig) (OSSService, error) {
 	}, nil
 }
 
-// UploadFile 实现了文件上传到阿里云 OSS 的逻辑
-func (s *AliyunOSSService) UploadFile(file multipart.File, header *multipart.FileHeader) (string, string, error) {
+// Upload stores a stream in Aliyun OSS.
+func (s *AliyunOSSService) Upload(ctx context.Context, input UploadInput) (string, string, error) {
 	// Debug log to check configuration
 	fmt.Printf("[AliyunOSS] Uploading file. Config CustomDomain: '%s', Bucket: '%s'\n", s.config.CustomDomain, s.config.Bucket)
 
@@ -37,8 +37,8 @@ func (s *AliyunOSSService) UploadFile(file multipart.File, header *multipart.Fil
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get oss bucket: %w", err)
 	}
-	objectKey := generateFilePath(s.config.Prefix, header.Filename)
-	err = bucket.PutObject(objectKey, file, oss.ContentType(header.Header.Get("Content-Type")))
+	objectKey := generateFilePath(s.config.Prefix, input.Name)
+	err = bucket.PutObject(objectKey, input.Body, oss.ContentType(input.ContentType), oss.WithContext(ctx))
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload file to oss: %w", err)
 	}

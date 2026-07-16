@@ -5,6 +5,7 @@ import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
 	crawlerService "blog_api/src/service/crawler"
+	"context"
 	"log"
 	"time"
 
@@ -56,11 +57,7 @@ func RunFriendLinkCrawlerJob(db *gorm.DB) {
 		return
 	}
 
-	// 使用并发爬虫
-	results := crawlerService.CrawlWebsitesConcurrently(links)
-
-	// 处理爬取结果
-	for _, crawlResult := range results {
+	err = crawlerService.CrawlWebsitesConcurrently(context.Background(), links, func(crawlResult crawlerService.CrawlJobResult) error {
 		link := crawlResult.Link
 		result := crawlResult.Result
 
@@ -82,6 +79,10 @@ func RunFriendLinkCrawlerJob(db *gorm.DB) {
 				}
 			}
 		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("[Cron] 友链爬取中断: %v", err)
 	}
 	log.Println("[Cron] 友链爬取任务完成")
 }
@@ -105,15 +106,17 @@ func RunDiedFriendLinkCheckJob(db *gorm.DB) {
 		return
 	}
 
-	// 使用并发爬虫
-	results := crawlerService.CrawlWebsitesConcurrently(links)
-	for _, crawlResult := range results {
+	err = crawlerService.CrawlWebsitesConcurrently(context.Background(), links, func(crawlResult crawlerService.CrawlJobResult) error {
 		link := crawlResult.Link
 		result := crawlResult.Result
 		err := friendsRepositories.UpdateFriendLink(db, link, result)
 		if err != nil {
 			log.Printf("[Cron] 在 cron 任务中更新失效友链 %s 失败: %v", link.Name, err)
 		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("[Cron] 失效友链检查中断: %v", err)
 	}
 	log.Println("[Cron] 失效友链检查任务完成")
 }
@@ -170,26 +173,18 @@ func RunRssParserJob(db *gorm.DB) {
 	log.Println("[Cron] RSS 解析任务完成")
 }
 
-func scheduleDiedCheckEvery48h(db *gorm.DB) {
-	scheduleFromNextMidnight("失效检查（友链+RSS）", 48*time.Hour, func() {
-		RunDiedFriendLinkCheckJob(db)
-		RunDiedRssCheckJob(db)
-	})
-}
-
-func scheduleImageCheckEvery48h(db *gorm.DB) {
-	scheduleFromNextMidnight("图片资源检查", 48*time.Hour, func() {
-		crawlerService.CheckImagesHealth(db)
-	})
-}
-
 // StartCronJobs 初始化并启动 cron 任务
 func StartCronJobs(db *gorm.DB) {
 	c := cron.New()
 
 	// 安排慢检查任务从下一天 0 点开始，每 48 小时运行一次
-	scheduleDiedCheckEvery48h(db)
-	scheduleImageCheckEvery48h(db)
+	scheduleFromNextMidnight("失效检查（友链+RSS）", 48*time.Hour, func() {
+		RunDiedFriendLinkCheckJob(db)
+		RunDiedRssCheckJob(db)
+	})
+	scheduleFromNextMidnight("图片资源检查", 48*time.Hour, func() {
+		crawlerService.CheckImagesHealth(db)
+	})
 
 	// 安排 RSS 解析任务每 3 小时运行一次
 	c.AddFunc("0 */3 * * *", func() {

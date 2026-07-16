@@ -12,6 +12,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const maxUploadRequestBytes = int64(65 << 20)
+
+func limitUploadBody(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadRequestBytes)
+}
+
+func uploadErrorStatus(err error) int {
+	var maxBytesErr *http.MaxBytesError
+	if errors.As(err, &maxBytesErr) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
+}
+
 // ResourceHandler 封装了处理资源相关请求的逻辑。
 type ResourceHandler struct {
 	resourceService *service.ResourceService
@@ -28,10 +42,12 @@ func NewResourceHandler(cfg *model.Config, ossService oss.OSSService) *ResourceH
 
 // UploadResourceLocal 处理本地文件上传请求。
 func (h *ResourceHandler) UploadResourceLocal(c *gin.Context) {
+	limitUploadBody(c)
 	// 从表单中获取文件
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "获取文件失败: "+err.Error()))
+		status := uploadErrorStatus(err)
+		c.JSON(status, model.NewErrorResponse(status, "获取文件失败: "+err.Error()))
 		return
 	}
 
@@ -60,6 +76,7 @@ func (h *ResourceHandler) UploadResourceOSS(c *gin.Context) {
 		c.JSON(http.StatusNotImplemented, model.NewErrorResponse(http.StatusNotImplemented, "OSS 服务未启用"))
 		return
 	}
+	limitUploadBody(c)
 
 	var req model.UploadResourceReq
 	if err := c.ShouldBind(&req); err != nil {
@@ -70,7 +87,8 @@ func (h *ResourceHandler) UploadResourceOSS(c *gin.Context) {
 	// 从表单中获取文件
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "获取文件失败: "+err.Error()))
+		status := uploadErrorStatus(err)
+		c.JSON(status, model.NewErrorResponse(status, "获取文件失败: "+err.Error()))
 		return
 	}
 	defer file.Close()
@@ -82,7 +100,12 @@ func (h *ResourceHandler) UploadResourceOSS(c *gin.Context) {
 		header.Filename = baseName
 	}
 
-	url, objectKey, err := h.ossService.UploadFile(file, header)
+	url, objectKey, err := h.ossService.Upload(c.Request.Context(), oss.UploadInput{
+		Name:        header.Filename,
+		ContentType: header.Header.Get("Content-Type"),
+		Size:        header.Size,
+		Body:        file,
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "上传到 OSS 失败: "+err.Error()))
 		return

@@ -31,41 +31,48 @@ func NewResourceService(cfg *model.Config) *ResourceService {
 // 它会检查文件扩展名是否在白名单内，并清理目标路径以防止路径遍历。
 // overwrite 参数决定如果文件已存在，是覆盖它还是生成一个新名字。
 func (s *ResourceService) SaveFile(file *multipart.FileHeader, subPath string, overwrite bool) (string, string, error) {
-	filePath, urlPath, err := s.prepareSavePath(file.Filename, subPath, overwrite)
-	if err != nil {
-		return "", "", err
-	}
-	// 打开源文件
 	src, err := file.Open()
 	if err != nil {
 		return "", "", fmt.Errorf("打开上传文件失败: %w", err)
 	}
 	defer src.Close()
-
-	// 创建目标文件
-	dst, err := os.Create(filePath)
-	if err != nil {
-		return "", "", fmt.Errorf("创建目标文件失败: %w", err)
-	}
-	defer dst.Close()
-
-	// 复制文件内容
-	if _, err := io.Copy(dst, src); err != nil {
-		return "", "", fmt.Errorf("保存文件失败: %w", err)
-	}
-
-	return filePath, urlPath, nil
+	return s.SaveReader(file.Filename, src, subPath, overwrite)
 }
 
-// SaveBytes 保存二进制文件到资源目录。
-func (s *ResourceService) SaveBytes(filename string, data []byte, subPath string, overwrite bool) (string, string, error) {
+// SaveReader streams a resource into local storage.
+func (s *ResourceService) SaveReader(filename string, src io.Reader, subPath string, overwrite bool) (string, string, error) {
 	filePath, urlPath, err := s.prepareSavePath(filename, subPath, overwrite)
 	if err != nil {
 		return "", "", err
 	}
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+
+	dst, err := os.CreateTemp(filepath.Dir(filePath), ".blog-api-upload-*")
+	if err != nil {
+		return "", "", fmt.Errorf("创建目标文件失败: %w", err)
+	}
+	tempPath := dst.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			dst.Close()
+			os.Remove(tempPath)
+		}
+	}()
+
+	if _, err := io.Copy(dst, src); err != nil {
 		return "", "", fmt.Errorf("保存文件失败: %w", err)
 	}
+	if err := dst.Close(); err != nil {
+		return "", "", fmt.Errorf("关闭目标文件失败: %w", err)
+	}
+	if err := os.Chmod(tempPath, 0644); err != nil {
+		return "", "", fmt.Errorf("设置目标文件权限失败: %w", err)
+	}
+	if err := os.Rename(tempPath, filePath); err != nil {
+		return "", "", fmt.Errorf("提交目标文件失败: %w", err)
+	}
+	committed = true
+
 	return filePath, urlPath, nil
 }
 

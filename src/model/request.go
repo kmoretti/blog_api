@@ -8,17 +8,6 @@ type EditFriendLinkReq struct {
 	} `json:"opt"`
 }
 
-// EmailVerifyRequest defines the request body for sending an email verification code.
-type EmailVerifyRequest struct {
-	Email string `json:"email" binding:"required"`
-}
-
-// EmailVerifyConfirmRequest defines the request body for confirming an email verification code.
-type EmailVerifyConfirmRequest struct {
-	Email string `json:"email" binding:"required"`
-	Code  string `json:"code" binding:"required"`
-}
-
 // EditFriendRssReq defines the request body for editing a friend rss link.
 type EditFriendRssReq struct {
 	Data map[string]interface{} `json:"data" binding:"required"`

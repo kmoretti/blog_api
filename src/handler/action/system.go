@@ -12,11 +12,6 @@ import (
 
 type SystemHandler struct{}
 
-// NewSystemHandler creates a new SystemHandler.
-func NewSystemHandler() *SystemHandler {
-	return &SystemHandler{}
-}
-
 // Restart handles POST /api/action/system/restart requests.
 // It returns first, then exits the current process so an external supervisor can restart it.
 func (h *SystemHandler) Restart(c *gin.Context) {

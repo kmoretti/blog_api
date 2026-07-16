@@ -15,11 +15,6 @@ type MediaHandler struct {
 	DB *gorm.DB
 }
 
-// NewMediaHandler creates a new media action handler
-func NewMediaHandler(db *gorm.DB) *MediaHandler {
-	return &MediaHandler{DB: db}
-}
-
 // CreateMedia handles POST /api/action/moments/media request
 func (h *MediaHandler) CreateMedia(c *gin.Context) {
 	var req model.CreateMomentMediaReq

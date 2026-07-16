@@ -15,10 +15,6 @@ type ImageHandler struct {
 	DB *gorm.DB
 }
 
-func NewImageHandler(db *gorm.DB) *ImageHandler {
-	return &ImageHandler{DB: db}
-}
-
 // GetImages handles GET /api/action/image request
 func (h *ImageHandler) GetImages(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")

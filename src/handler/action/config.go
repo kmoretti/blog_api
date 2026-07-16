@@ -11,10 +11,6 @@ import (
 // ConfigHandler 处理与配置相关的请求
 type ConfigHandler struct{}
 
-func NewConfigHandler() *ConfigHandler {
-	return &ConfigHandler{}
-}
-
 // UpdateConfig 处理 PUT /api/action/config 请求，用于更新系统配置
 func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 	var req []model.UpdateConfigReq

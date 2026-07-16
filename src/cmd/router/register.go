@@ -21,24 +21,24 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		log.Printf("Failed to initialize OSS service: %v", err)
 	}
 
-	friendLinkHandler := handler.NewFriendLinkHandler(db)
-	rssPostHandler := handler.NewRssPostHandler(db)
-	updataHandler := handlerAction.NewUpdataHandler(db)
-	RssHandler := handlerAction.NewRssHandler(db)
+	friendLinkHandler := &handler.FriendLinkHandler{DB: db}
+	rssPostHandler := &handler.RssPostHandler{DB: db}
+	updataHandler := &handlerAction.UpdataHandler{DB: db}
+	RssHandler := &handlerAction.FriendRssHandler{DB: db}
 	authHandlerInstance := authHandler.NewAuthHandler()
-	verifyHandler := authHandler.NewVerifyHandler(db)
-	statusHandler := handler.NewStatusHandler(db, startTime)
-	imageHandler := handlerAction.NewImageHandler(db)
+	verifyHandler := &authHandler.VerifyHandler{DB: db}
+	statusHandler := &handler.StatusHandler{DB: db, StartTime: startTime}
+	imageHandler := &handlerAction.ImageHandler{DB: db}
 	resourceHandler := handlerAction.NewResourceHandler(cfg, ossService)
 	imagePublicHandler := handler.NewImagePublicHandler(db)
-	verifyPublicHandler := authHandler.NewVerifyPublicHandler()
-	momentHandler := handler.NewMomentHandler(db)
-	momentReactionHandler := handler.NewMomentReactionHandler(db)
-	momentActionHandler := handlerAction.NewMomentHandler(db)
-	mediaHandler := handlerAction.NewMediaHandler(db)
-	configHandler := handlerAction.NewConfigHandler()
+	verifyPublicHandler := &authHandler.VerifyPublicHandler{}
+	momentHandler := &handler.MomentHandler{DB: db}
+	momentReactionHandler := &handler.MomentReactionHandler{DB: db}
+	momentActionHandler := &handlerAction.MomentHandler{DB: db}
+	mediaHandler := &handlerAction.MediaHandler{DB: db}
+	configHandler := &handlerAction.ConfigHandler{}
 	fingerprintHandler := authHandler.NewFingerprintHandler(db)
-	systemHandler := handlerAction.NewSystemHandler()
+	systemHandler := &handlerAction.SystemHandler{}
 
 	// API routes
 	apiGroup := router.Group("/api")

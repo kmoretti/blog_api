@@ -4,6 +4,8 @@ import (
 	"blog_api/src/config"
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -13,22 +15,44 @@ import (
 	"gorm.io/gorm"
 )
 
-const maxRssParseFailures = 4
+const (
+	maxRssParseFailures = 4
+	maxRSSResponseBytes = int64(8 << 20)
+)
 
-func newRssParser() *gofeed.Parser {
-	fp := gofeed.NewParser()
+var rssHTTPClient = &http.Client{}
+
+func parseFeedURL(ctx context.Context, rawURL string) (*gofeed.Feed, error) {
 	timeoutSeconds := config.GetConfig().Crawler.RssTimeoutSeconds
 	if timeoutSeconds <= 0 {
 		timeoutSeconds = 15
 	}
-	fp.Client = &http.Client{Timeout: time.Duration(timeoutSeconds) * time.Second}
-	return fp
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create RSS request: %w", err)
+	}
+	req.Header.Set("User-Agent", "blog_api RSS crawler")
+	resp, err := rssHTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch RSS: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("fetch RSS: unexpected HTTP status %d", resp.StatusCode)
+	}
+
+	feed, err := gofeed.NewParser().Parse(&limitedReader{reader: resp.Body, remaining: maxRSSResponseBytes})
+	if err != nil {
+		return nil, fmt.Errorf("parse RSS: %w", err)
+	}
+	return feed, nil
 }
 
 // ParseRssFeed parses an RSS feed and saves the articles to the database.
 func ParseRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
-	fp := newRssParser()
-	feed, err := fp.ParseURL(rssURL)
+	feed, err := parseFeedURL(context.Background(), rssURL)
 	if err != nil {
 		log.Printf("解析 RSS feed %s 时出错: %v", rssURL, err)
 		updateRssParseState(db, friendRssID, false)
@@ -144,8 +168,7 @@ func updateRssParseState(db *gorm.DB, friendRssID int, success bool) {
 
 // GetRssTitle fetches and returns the title of an RSS feed.
 func GetRssTitle(rssURL string) (string, error) {
-	fp := newRssParser()
-	feed, err := fp.ParseURL(rssURL)
+	feed, err := parseFeedURL(context.Background(), rssURL)
 	if err != nil {
 		log.Printf("解析 RSS feed %s 时出错: %v", rssURL, err)
 		return "", err
@@ -155,8 +178,7 @@ func GetRssTitle(rssURL string) (string, error) {
 
 // CheckAndReviveRssFeed probes a died RSS feed and revives it on success.
 func CheckAndReviveRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
-	fp := newRssParser()
-	if _, err := fp.ParseURL(rssURL); err != nil {
+	if _, err := parseFeedURL(context.Background(), rssURL); err != nil {
 		log.Printf("失效 RSS 探活失败 %s (id=%d): %v", rssURL, friendRssID, err)
 		return
 	}

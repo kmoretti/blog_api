@@ -6,11 +6,13 @@ import (
 	momentRepositories "blog_api/src/repositories/moment"
 	coreService "blog_api/src/service"
 	"blog_api/src/service/oss"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -193,27 +195,19 @@ func (l *discordListener) downloadAttachment(att *discordgo.MessageAttachment, m
 		return nil, nil
 	}
 
-	resp, err := http.Get(att.URL)
+	file, size, sample, err := downloadToTemp(context.Background(), att.URL)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer file.Close()
+	defer os.Remove(file.Name())
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status: %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	fileName, contentType, err := normalizeDiscordFile(att.Filename, att.ContentType, mediaType, data)
+	fileName, contentType, err := normalizeDiscordFile(att.Filename, att.ContentType, mediaType, sample)
 	if err != nil {
 		return nil, err
 	}
 
-	storedURL, isLocal, err := l.storeFile(fileName, contentType, data)
+	storedURL, isLocal, err := l.storeFile(fileName, contentType, file, size)
 	if err != nil {
 		return nil, err
 	}
@@ -226,12 +220,12 @@ func (l *discordListener) downloadAttachment(att *discordgo.MessageAttachment, m
 	}, nil
 }
 
-func normalizeDiscordFile(fileName, mimeType, mediaType string, data []byte) (string, string, error) {
+func normalizeDiscordFile(fileName, mimeType, mediaType string, sample []byte) (string, string, error) {
 	contentType := strings.TrimSpace(mimeType)
 	if idx := strings.Index(contentType, ";"); idx != -1 {
 		contentType = strings.TrimSpace(contentType[:idx])
 	}
-	detectedType := http.DetectContentType(data)
+	detectedType := http.DetectContentType(sample)
 	if contentType == "" || contentType == "application/octet-stream" {
 		contentType = detectedType
 	}
@@ -259,18 +253,27 @@ func normalizeDiscordFile(fileName, mimeType, mediaType string, data []byte) (st
 	return fileName, contentType, nil
 }
 
-func (l *discordListener) storeFile(name, mimeType string, data []byte) (string, int, error) {
+func (l *discordListener) storeFile(name, mimeType string, file *os.File, size int64) (string, int, error) {
 	datePath := time.Now().Format("060102")
 	finalSubPath := filepath.Join("moments", datePath)
 	if l.ossService != nil {
 		path := filepath.Join(finalSubPath, name)
-		if url, err := UploadToOSS(l.ossService, path, mimeType, data); err == nil {
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return "", 0, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		url, err := UploadToOSS(ctx, l.ossService, path, mimeType, size, file)
+		cancel()
+		if err == nil {
 			return url, 0, nil
 		}
 	}
 
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", 0, err
+	}
 	svc := coreService.NewResourceService(config.GetConfig())
-	_, url, err := svc.SaveBytes(name, data, finalSubPath, false)
+	_, url, err := svc.SaveReader(name, file, finalSubPath, false)
 	return url, 1, err
 }
 

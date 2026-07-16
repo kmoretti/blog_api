@@ -3,11 +3,17 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
 
-const defaultAntiBotTTLSeconds = 300
+const (
+	defaultAntiBotTTLSeconds = 300
+	maxAntiBotTokens         = 10000
+)
+
+var errAntiBotCapacityReached = errors.New("anti-bot token capacity reached")
 
 // AntiBotStore keeps short-lived anti-bot tokens in memory.
 type AntiBotStore struct {
@@ -29,9 +35,12 @@ func IssueAntiBotToken() (string, int64, error) {
 	expiresAt := time.Now().Add(defaultAntiBotTTLSeconds * time.Second).Unix()
 
 	antiBotStore.mu.Lock()
-	antiBotStore.tokens[token] = expiresAt
+	defer antiBotStore.mu.Unlock()
 	antiBotStore.cleanupLocked(time.Now().Unix())
-	antiBotStore.mu.Unlock()
+	if len(antiBotStore.tokens) >= maxAntiBotTokens {
+		return "", 0, errAntiBotCapacityReached
+	}
+	antiBotStore.tokens[token] = expiresAt
 
 	return token, expiresAt, nil
 }

@@ -15,11 +15,6 @@ type RssPostHandler struct {
 	DB *gorm.DB
 }
 
-// NewRssPostHandler creates a new RSS post handler
-func NewRssPostHandler(db *gorm.DB) *RssPostHandler {
-	return &RssPostHandler{DB: db}
-}
-
 // GetRssPosts handles GET /api/rss request
 // Query parameters:
 //   - rss_id: filter by rss_id (optional)

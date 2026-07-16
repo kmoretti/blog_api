@@ -22,6 +22,8 @@ type turnstileResponse struct {
 	Hostname   string   `json:"hostname"`
 }
 
+const maxTurnstileRequestBytes = int64(1 << 20)
+
 // TurnstileVerify validates a Turnstile token before continuing.
 func TurnstileVerify() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -116,6 +118,7 @@ func extractTurnstileToken(c *gin.Context) string {
 		return token
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxTurnstileRequestBytes)
 	body, err := c.GetRawData()
 	if err != nil || len(body) == 0 {
 		return ""

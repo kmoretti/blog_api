@@ -17,11 +17,6 @@ type StatusHandler struct {
 	StartTime time.Time
 }
 
-// NewStatusHandler creates a new status handler.
-func NewStatusHandler(db *gorm.DB, startTime time.Time) *StatusHandler {
-	return &StatusHandler{DB: db, StartTime: startTime}
-}
-
 // GetSystemStatus handles the GET /api/status request.
 func (h *StatusHandler) GetSystemStatus(c *gin.Context) {
 	stats, err := repositories.GetSystemStats(h.DB)

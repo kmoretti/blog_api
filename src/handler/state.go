@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -19,7 +20,9 @@ const (
 	defaultStateTTL    = 7 * 24 * time.Hour
 	maxStateTTL        = 7 * 24 * time.Hour
 	maxStateBodyBytes  = int64(256 * 1024)
+	maxStateTotalBytes = int64(8 << 20)
 	maxStateEntryCount = 1000
+	stateCleanupPeriod = 3 * time.Hour
 )
 
 var stateKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
@@ -39,8 +42,10 @@ type StateHandler struct {
 
 // NewStateHandler creates a handler with the production state limits.
 func NewStateHandler() *StateHandler {
+	store := service.NewStateStore(maxStateEntryCount, maxStateBodyBytes, maxStateTotalBytes)
+	go store.RunCleanup(context.Background(), stateCleanupPeriod)
 	return &StateHandler{
-		store: service.NewStateStore(maxStateEntryCount, maxStateBodyBytes),
+		store: store,
 		now:   time.Now,
 	}
 }
@@ -80,6 +85,8 @@ func (h *StateHandler) PutState(c *gin.Context) {
 		case errors.Is(err, service.ErrStatePayloadTooLarge):
 			c.JSON(http.StatusRequestEntityTooLarge, model.NewErrorResponse(http.StatusRequestEntityTooLarge, err.Error()))
 		case errors.Is(err, service.ErrStateCapacityReached):
+			c.JSON(http.StatusInsufficientStorage, model.NewErrorResponse(http.StatusInsufficientStorage, err.Error()))
+		case errors.Is(err, service.ErrStateMemoryLimitReached):
 			c.JSON(http.StatusInsufficientStorage, model.NewErrorResponse(http.StatusInsufficientStorage, err.Error()))
 		default:
 			c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "failed to store state"))

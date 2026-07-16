@@ -3,6 +3,7 @@ package config
 import (
 	"blog_api/src/model"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -16,16 +17,16 @@ import (
 
 var (
 	globalConfig *model.Config
+	loadErr      error
 	once         sync.Once
 	v            *viper.Viper // 全局 viper 实例
 )
 
 func Load() (*model.Config, error) {
-	var err error
 	once.Do(func() {
-		globalConfig, err = loadConfig()
+		globalConfig, loadErr = loadConfig()
 	})
-	return globalConfig, err
+	return globalConfig, loadErr
 }
 
 func GetConfig() *model.Config {
@@ -44,7 +45,7 @@ func loadConfig() (*model.Config, error) {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // 将配置键中的'.'替换为'_'以匹配环境变量
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok || errors.Is(err, os.ErrNotExist) {
 			log.Printf("未找到 .env 文件，将跳过加载")
 		} else {
 			return nil, fmt.Errorf("解析 .env 文件时发生错误: %w", err)

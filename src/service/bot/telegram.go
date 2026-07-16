@@ -6,11 +6,13 @@ import (
 	momentRepositories "blog_api/src/repositories/moment"
 	coreService "blog_api/src/service"
 	"blog_api/src/service/oss"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -301,30 +303,22 @@ func (l *telegramListener) downloadAndStore(msg *tgbotapi.Message) ([]model.Mome
 		return nil, fmt.Errorf("telegram file path is empty")
 	}
 
-	resp, err := http.Get(file.Link(l.bot.Token))
+	tempFile, size, sample, err := downloadToTemp(context.Background(), file.Link(l.bot.Token))
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status: %s", resp.Status)
-	}
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	defer tempFile.Close()
+	defer os.Remove(tempFile.Name())
 
 	if fileName == "" {
 		fileName = filepath.Base(file.FilePath)
 	}
-	fileName, mimeType, err = normalizeTelegramFile(fileName, mimeType, mediaType, data)
+	fileName, mimeType, err = normalizeTelegramFile(fileName, mimeType, mediaType, sample)
 	if err != nil {
 		return nil, err
 	}
 
-	storedURL, isLocal, err := l.storeFile(fileName, mimeType, data)
+	storedURL, isLocal, err := l.storeFile(fileName, mimeType, tempFile, size)
 	if err != nil {
 		return nil, err
 	}
@@ -363,12 +357,12 @@ func pickMedia(msg *tgbotapi.Message) (id, name, mimeType, mType string) {
 	return "", "", "", ""
 }
 
-func normalizeTelegramFile(fileName, mimeType, mediaType string, data []byte) (string, string, error) {
+func normalizeTelegramFile(fileName, mimeType, mediaType string, sample []byte) (string, string, error) {
 	contentType := strings.TrimSpace(mimeType)
 	if idx := strings.Index(contentType, ";"); idx != -1 {
 		contentType = strings.TrimSpace(contentType[:idx])
 	}
-	detectedType := http.DetectContentType(data)
+	detectedType := http.DetectContentType(sample)
 	if contentType == "" || contentType == "application/octet-stream" {
 		contentType = detectedType
 	}
@@ -393,17 +387,26 @@ func normalizeTelegramFile(fileName, mimeType, mediaType string, data []byte) (s
 	return fileName, contentType, nil
 }
 
-func (l *telegramListener) storeFile(name, mimeType string, data []byte) (string, int, error) {
+func (l *telegramListener) storeFile(name, mimeType string, file *os.File, size int64) (string, int, error) {
 	datePath := time.Now().Format("060102")
 	finalSubPath := filepath.Join("moments", datePath)
 	if l.ossService != nil {
 		path := filepath.Join(finalSubPath, name)
-		if url, err := UploadToOSS(l.ossService, path, mimeType, data); err == nil {
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return "", 0, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		url, err := UploadToOSS(ctx, l.ossService, path, mimeType, size, file)
+		cancel()
+		if err == nil {
 			return url, 0, nil
 		}
 	}
 
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", 0, err
+	}
 	svc := coreService.NewResourceService(config.GetConfig())
-	_, url, err := svc.SaveBytes(name, data, finalSubPath, false)
+	_, url, err := svc.SaveReader(name, file, finalSubPath, false)
 	return url, 1, err
 }

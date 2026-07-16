@@ -17,11 +17,6 @@ type FriendRssHandler struct {
 	DB *gorm.DB
 }
 
-// NewFriendRssHandler 创建一个新的 FriendRssHandler
-func NewRssHandler(db *gorm.DB) *FriendRssHandler {
-	return &FriendRssHandler{DB: db}
-}
-
 // CreateRss 处理 POST /api/action/rss 请求，用于创建新的 RSS feed。
 func (h *FriendRssHandler) CreateRss(c *gin.Context) {
 	var req model.CreateRssReq

@@ -11,11 +11,6 @@ import (
 // VerifyPublicHandler exposes safe verification config for public clients.
 type VerifyPublicHandler struct{}
 
-// NewVerifyPublicHandler creates a new VerifyPublicHandler.
-func NewVerifyPublicHandler() *VerifyPublicHandler {
-	return &VerifyPublicHandler{}
-}
-
 // GetVerifyConfig handles GET /api/public/verify-conf request.
 func (h *VerifyPublicHandler) GetVerifyConfig(c *gin.Context) {
 	cfg := config.GetConfig()

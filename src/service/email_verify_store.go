@@ -12,6 +12,8 @@ import (
 const (
 	defaultEmailCodeTTLSeconds  = 600
 	defaultEmailTokenTTLSeconds = 86400
+	maxEmailCodes               = 10000
+	maxEmailTokens              = 10000
 )
 
 type emailCodeEntry struct {
@@ -55,12 +57,15 @@ func IssueEmailVerifyCode(email string) (string, int64, error) {
 	expiresAt := time.Now().Add(defaultEmailCodeTTLSeconds * time.Second).Unix()
 
 	emailVerifyStore.mu.Lock()
+	defer emailVerifyStore.mu.Unlock()
+	emailVerifyStore.cleanupLocked(time.Now().Unix())
+	if _, exists := emailVerifyStore.codes[email]; !exists && len(emailVerifyStore.codes) >= maxEmailCodes {
+		return "", 0, fmt.Errorf("email verification code capacity reached")
+	}
 	emailVerifyStore.codes[email] = emailCodeEntry{
 		code:      code,
 		expiresAt: expiresAt,
 	}
-	emailVerifyStore.cleanupLocked(time.Now().Unix())
-	emailVerifyStore.mu.Unlock()
 
 	return code, expiresAt, nil
 }
@@ -94,31 +99,17 @@ func IssueEmailToken(email string) (string, int64, error) {
 	expiresAt := time.Now().Add(defaultEmailTokenTTLSeconds * time.Second).Unix()
 
 	emailVerifyStore.mu.Lock()
+	defer emailVerifyStore.mu.Unlock()
+	emailVerifyStore.cleanupLocked(time.Now().Unix())
+	if len(emailVerifyStore.tokens) >= maxEmailTokens {
+		return "", 0, fmt.Errorf("email token capacity reached")
+	}
 	emailVerifyStore.tokens[token] = emailTokenEntry{
 		email:     email,
 		expiresAt: expiresAt,
 	}
-	emailVerifyStore.cleanupLocked(time.Now().Unix())
-	emailVerifyStore.mu.Unlock()
 
 	return token, expiresAt, nil
-}
-
-// ConsumeEmailToken validates and consumes a token, returning the bound email.
-func ConsumeEmailToken(token string) (string, bool) {
-	now := time.Now().Unix()
-	emailVerifyStore.mu.Lock()
-	defer emailVerifyStore.mu.Unlock()
-
-	entry, ok := emailVerifyStore.tokens[token]
-	if !ok || entry.expiresAt <= now {
-		if ok {
-			delete(emailVerifyStore.tokens, token)
-		}
-		return "", false
-	}
-	delete(emailVerifyStore.tokens, token)
-	return entry.email, true
 }
 
 // ValidateEmailToken validates a token without consuming it.

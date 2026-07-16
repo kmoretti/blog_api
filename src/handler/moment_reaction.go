@@ -19,11 +19,6 @@ type MomentReactionHandler struct {
 	DB *gorm.DB
 }
 
-// NewMomentReactionHandler creates a new reaction handler.
-func NewMomentReactionHandler(db *gorm.DB) *MomentReactionHandler {
-	return &MomentReactionHandler{DB: db}
-}
-
 // AddReaction handles POST /api/public/moments/:id/reactions request.
 func (h *MomentReactionHandler) AddReaction(c *gin.Context) {
 	momentID, ok := parseMomentID(c)
@@ -56,7 +51,7 @@ func (h *MomentReactionHandler) AddReaction(c *gin.Context) {
 	}
 
 	if err := momentRepositories.CreateMomentReaction(h.DB, reaction); err != nil {
-		if isUniqueViolation(err) {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			c.JSON(http.StatusConflict, model.NewErrorResponse(409, "reaction already exists"))
 			return
 		}
@@ -120,11 +115,4 @@ func isValidReaction(reaction string) bool {
 	default:
 		return false
 	}
-}
-
-func isUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

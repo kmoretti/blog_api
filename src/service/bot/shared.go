@@ -2,9 +2,8 @@ package bot
 
 import (
 	"blog_api/src/service/oss"
-	"bytes"
-	"mime/multipart"
-	"net/textproto"
+	"context"
+	"io"
 	"sync"
 
 	"github.com/bwmarrin/discordgo"
@@ -45,23 +44,13 @@ func GetTelegramBot() *tgbotapi.BotAPI {
 	return telegramSession
 }
 
-func UploadToOSS(svc oss.OSSService, name, mimeType string, data []byte) (string, error) {
-	header := &multipart.FileHeader{
-		Filename: name,
-		Header:   make(textproto.MIMEHeader),
-		Size:     int64(len(data)),
-	}
-	if mimeType != "" {
-		header.Header.Set("Content-Type", mimeType)
-	}
-	url, _, err := svc.UploadFile(&memFile{Reader: bytes.NewReader(data)}, header)
+// UploadToOSS uploads a replayable stream without taking ownership of body.
+func UploadToOSS(ctx context.Context, svc oss.OSSService, name, mimeType string, size int64, body io.ReadSeeker) (string, error) {
+	url, _, err := svc.Upload(ctx, oss.UploadInput{
+		Name:        name,
+		ContentType: mimeType,
+		Size:        size,
+		Body:        body,
+	})
 	return url, err
 }
-
-type memFile struct {
-	*bytes.Reader
-}
-
-func (m *memFile) Close() error                                  { return nil }
-func (m *memFile) ReadAt(p []byte, off int64) (n int, err error) { return m.Reader.ReadAt(p, off) }
-func (m *memFile) Seek(offset int64, whence int) (int64, error)  { return m.Reader.Seek(offset, whence) }

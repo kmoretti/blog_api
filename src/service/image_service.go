@@ -16,6 +16,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const imageScanBatchSize = 256
+
 // ScanAndSaveImages 扫描指定目录下的图片，根据配置进行格式转换，并将其信息保存到数据库
 func ScanAndSaveImages(db *gorm.DB) error {
 	cfg := config.GetConfig()
@@ -25,7 +27,17 @@ func ScanAndSaveImages(db *gorm.DB) error {
 		return nil
 	}
 
-	var images []model.Image
+	images := make([]model.Image, 0, imageScanBatchSize)
+	flush := func() error {
+		if len(images) == 0 {
+			return nil
+		}
+		if err := imageRepositories.BatchInsertImages(db, images); err != nil {
+			return err
+		}
+		images = images[:0]
+		return nil
+	}
 	targetFormat := strings.ToLower(cfg.Data.Image.ConvTo)
 	walkErr := filepath.Walk(imagePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -53,6 +65,9 @@ func ScanAndSaveImages(db *gorm.DB) error {
 				}
 			}
 			images = append(images, *processed.image)
+			if len(images) == cap(images) {
+				return flush()
+			}
 		}
 		return nil
 	})
@@ -62,24 +77,12 @@ func ScanAndSaveImages(db *gorm.DB) error {
 		return walkErr
 	}
 
-	if len(images) > 0 {
-		log.Printf("[service][image] Found and processed %d images.", len(images))
-		newImages, err := imageRepositories.FilterNonExistingImages(db, images)
-		if err != nil {
-			log.Printf("[service][image][ERR] Failed to filter existing images: %v", err)
-			return err
-		}
-
-		if len(newImages) == 0 {
-			log.Println("[service][image] All images already exist in database. Skipping insert.")
-			return nil
-		}
-
-		log.Printf("[service][image] Inserting %d new images...", len(newImages))
-		return imageRepositories.BatchInsertImages(db, newImages)
+	if err := flush(); err != nil {
+		log.Printf("[service][image][ERR] Failed to insert image batch: %v", err)
+		return err
 	}
 
-	log.Println("[service][image] No new images found to process.")
+	log.Println("[service][image] Image scan completed.")
 	return nil
 }
 

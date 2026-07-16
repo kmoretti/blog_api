@@ -15,11 +15,6 @@ type VerifyHandler struct {
 	DB *gorm.DB
 }
 
-// NewVerifyHandler creates a new VerifyHandler.
-func NewVerifyHandler(db *gorm.DB) *VerifyHandler {
-	return &VerifyHandler{DB: db}
-}
-
 // IssueVerifyToken handles POST /api/verify/turnstile request.
 func (h *VerifyHandler) IssueVerifyToken(c *gin.Context) {
 	token, expiresAt, err := service.IssueAntiBotToken()

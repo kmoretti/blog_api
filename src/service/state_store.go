@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,6 +17,8 @@ var (
 	ErrStatePayloadTooLarge = errors.New("state payload is too large")
 	// ErrStateCapacityReached indicates that no more distinct states can be stored.
 	ErrStateCapacityReached = errors.New("state capacity reached")
+	// ErrStateMemoryLimitReached indicates that stored payloads reached their global byte budget.
+	ErrStateMemoryLimitReached = errors.New("state memory limit reached")
 )
 
 type stateEntry struct {
@@ -38,24 +41,51 @@ type StateStore struct {
 	entries         map[string]stateEntry
 	maxEntries      int
 	maxPayloadBytes int64
+	maxTotalBytes   int64
+	totalBytes      int64
 	now             func() time.Time
 }
 
 // NewStateStore creates a store with fixed entry and payload limits.
 //
-// maxEntries and maxPayloadBytes must both be positive.
-func NewStateStore(maxEntries int, maxPayloadBytes int64) *StateStore {
+// All limits must be positive. maxTotalBytes limits owned payload bytes across
+// all entries; snapshots returned to callers are not included.
+func NewStateStore(maxEntries int, maxPayloadBytes, maxTotalBytes int64) *StateStore {
 	if maxEntries <= 0 {
 		panic("state store maxEntries must be positive")
 	}
 	if maxPayloadBytes <= 0 {
 		panic("state store maxPayloadBytes must be positive")
 	}
+	if maxTotalBytes <= 0 {
+		panic("state store maxTotalBytes must be positive")
+	}
 	return &StateStore{
 		entries:         make(map[string]stateEntry),
 		maxEntries:      maxEntries,
 		maxPayloadBytes: maxPayloadBytes,
+		maxTotalBytes:   maxTotalBytes,
 		now:             time.Now,
+	}
+}
+
+// RunCleanup removes expired entries at interval until ctx is canceled.
+// The method blocks and is intended to run in one application-owned goroutine.
+func (s *StateStore) RunCleanup(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		panic("state cleanup interval must be positive")
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			s.mu.Lock()
+			s.cleanupLocked(now)
+			s.mu.Unlock()
+		}
 	}
 }
 
@@ -75,13 +105,19 @@ func (s *StateStore) Put(key string, payload []byte, expiresAt time.Time) (state
 	defer s.mu.Unlock()
 	s.cleanupLocked(now)
 
-	_, exists := s.entries[key]
+	existing, exists := s.entries[key]
 	if !exists && len(s.entries) >= s.maxEntries {
 		return StoredState{}, false, ErrStateCapacityReached
+	}
+	existingBytes := int64(len(existing.payload))
+	newTotalBytes := s.totalBytes - existingBytes + int64(len(payload))
+	if newTotalBytes > s.maxTotalBytes {
+		return StoredState{}, false, ErrStateMemoryLimitReached
 	}
 
 	ownedPayload := bytes.Clone(payload)
 	s.entries[key] = stateEntry{payload: ownedPayload, expiresAt: expiresAt}
+	s.totalBytes = newTotalBytes
 	return snapshot(s.entries[key]), !exists, nil
 }
 
@@ -106,10 +142,12 @@ func (s *StateStore) Delete(key string) bool {
 	defer s.mu.Unlock()
 	s.cleanupLocked(now)
 
-	if _, ok := s.entries[key]; !ok {
+	entry, ok := s.entries[key]
+	if !ok {
 		return false
 	}
 	delete(s.entries, key)
+	s.totalBytes -= int64(len(entry.payload))
 	return true
 }
 
@@ -117,6 +155,7 @@ func (s *StateStore) cleanupLocked(now time.Time) {
 	for key, entry := range s.entries {
 		if !entry.expiresAt.After(now) {
 			delete(s.entries, key)
+			s.totalBytes -= int64(len(entry.payload))
 		}
 	}
 }

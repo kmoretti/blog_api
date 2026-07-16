@@ -14,26 +14,17 @@ import (
 	"gorm.io/gorm"
 )
 
+const imageHealthBatchSize = 256
+
 // CheckImagesHealth checks local and remote images and updates status when broken or recovered.
 func CheckImagesHealth(db *gorm.DB) {
-	images, err := imageRepositories.ListImages(db)
-	if err != nil {
-		log.Printf("[crawler][image][ERR] Failed to list images: %v", err)
-		return
-	}
-
-	if len(images) == 0 {
-		log.Println("[crawler][image] No images found for health check.")
-		return
-	}
-
 	client := &http.Client{Timeout: 10 * time.Second}
 	checkedCount := 0
 	brokenCount := 0
 	recoveredCount := 0
 	var mu sync.Mutex
 
-	CheckImagesConcurrently(images, func(img model.Image) {
+	check := func(img model.Image) {
 		exists, checked, err := checkImageExists(img, client)
 		if err != nil {
 			log.Printf("[crawler][image][WARN] Image check failed (ID: %d, URL: %s): %v", img.ID, img.URL, err)
@@ -69,7 +60,24 @@ func CheckImagesHealth(db *gorm.DB) {
 				mu.Unlock()
 			}
 		}
-	})
+	}
+
+	afterID := 0
+	for {
+		images, err := imageRepositories.ListImagesAfterID(db, afterID, imageHealthBatchSize)
+		if err != nil {
+			log.Printf("[crawler][image][ERR] Failed to list images: %v", err)
+			return
+		}
+		if len(images) == 0 {
+			break
+		}
+		CheckImagesConcurrently(images, check)
+		afterID = images[len(images)-1].ID
+		if len(images) < imageHealthBatchSize {
+			break
+		}
+	}
 
 	log.Printf("[crawler][image] Image health check finished. checked=%d broken=%d recovered=%d", checkedCount, brokenCount, recoveredCount)
 }

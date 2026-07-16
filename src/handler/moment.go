@@ -17,11 +17,6 @@ type MomentHandler struct {
 	DB *gorm.DB
 }
 
-// NewMomentHandler creates a new moment handler
-func NewMomentHandler(db *gorm.DB) *MomentHandler {
-	return &MomentHandler{DB: db}
-}
-
 // GetMoments handles GET /api/moments request
 func (h *MomentHandler) GetMoments(c *gin.Context) {
 	pageStr := c.DefaultQuery("page", "1")

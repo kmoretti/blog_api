@@ -10,6 +10,7 @@ import (
 	"blog_api/src/service/oss"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -39,7 +40,15 @@ func Run() {
 	go func() {
 		addr := fmt.Sprintf("%s:%s", cfg.ListenAddress, cfg.Port)
 		log.Printf("[main][Http]HTTP 服务器启动于 %s", addr)
-		if err := router.Run(addr); err != nil {
+		server := &http.Server{
+			Addr:              addr,
+			Handler:           router,
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       2 * time.Minute,
+			WriteTimeout:      2 * time.Minute,
+			IdleTimeout:       time.Minute,
+		}
+		if err := server.ListenAndServe(); err != nil {
 			log.Fatalf("[main][Http]启动 HTTP 服务器失败: %v", err)
 		}
 	}()

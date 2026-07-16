@@ -4,7 +4,6 @@ import (
 	"blog_api/src/model"
 	"context"
 	"fmt"
-	"mime/multipart"
 	"net/url"
 	"strings"
 
@@ -54,15 +53,16 @@ func newS3Client(cfg *model.OSSConfig) (*s3.Client, error) {
 	}), nil
 }
 
-// UploadFile 实现了文件上传到 S3 的逻辑
-func (s *S3OSSService) UploadFile(file multipart.File, header *multipart.FileHeader) (string, string, error) {
+// Upload stores a stream in S3.
+func (s *S3OSSService) Upload(ctx context.Context, input UploadInput) (string, string, error) {
 	// 生成在 OSS 中的存储路径
-	objectKey := generateFilePath(s.config.Prefix, header.Filename)
-	_, err := s.uploader.Upload(context.TODO(), &s3.PutObjectInput{
-		Bucket:      aws.String(s.config.Bucket),
-		Key:         aws.String(objectKey),
-		Body:        file,
-		ContentType: aws.String(header.Header.Get("Content-Type")),
+	objectKey := generateFilePath(s.config.Prefix, input.Name)
+	_, err := s.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(s.config.Bucket),
+		Key:           aws.String(objectKey),
+		Body:          input.Body,
+		ContentType:   aws.String(input.ContentType),
+		ContentLength: aws.Int64(input.Size),
 	})
 	if err != nil {
 		return "", "", fmt.Errorf("failed to upload file to s3: %w", err)

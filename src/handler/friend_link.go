@@ -16,11 +16,6 @@ type FriendLinkHandler struct {
 	DB *gorm.DB
 }
 
-// NewFriendLinkHandler creates a new friend link handler
-func NewFriendLinkHandler(db *gorm.DB) *FriendLinkHandler {
-	return &FriendLinkHandler{DB: db}
-}
-
 // toFriendLinkDTOs converts a slice of FriendWebsite models to a slice of FriendLinkDTOs.
 // If isPrivate is true, it includes sensitive fields like Email and Times.
 func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.FriendLinkDTO {

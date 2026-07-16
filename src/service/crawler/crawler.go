@@ -2,35 +2,35 @@ package crawlerService
 
 import (
 	"blog_api/src/model"
+	"context"
 	"log"
 	"net/http"
 	"net/url"
 	"time"
 
-	"bytes"
-	"io"
-
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html/charset"
 )
 
-func CrawlWebsite(url string) model.CrawlResult {
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+const maxHTMLResponseBytes = int64(4 << 20)
 
-	req, err := http.NewRequest("GET", url, nil)
+var crawlerHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
+
+func crawlWebsite(ctx context.Context, rawURL string) model.CrawlResult {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		log.Printf("[crawler]创建获取 %s 的请求时出错: %v", url, err)
+		log.Printf("[crawler]创建获取 %s 的请求时出错: %v", rawURL, err)
 		return model.CrawlResult{Status: "error"}
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 -  blog_api_webCrawler")
-	resp, err := client.Do(req)
+	resp, err := crawlerHTTPClient.Do(req)
 	if err != nil {
-		log.Printf("[crawler]获取 URL %s 时出错: %v", url, err)
+		log.Printf("[crawler]获取 URL %s 时出错: %v", rawURL, err)
 		return model.CrawlResult{Status: "timeout"}
 	}
 	defer resp.Body.Close()
@@ -38,25 +38,23 @@ func CrawlWebsite(url string) model.CrawlResult {
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
 		redirectLocation := resp.Header.Get("Location")
 		absoluteRedirectURL := toAbsoluteURL(resp.Request.URL, redirectLocation)
-		log.Printf("[crawler]检测到 %s 重定向到 %s (resolved to %s)", url, redirectLocation, absoluteRedirectURL)
+		log.Printf("[crawler]检测到 %s 重定向到 %s (resolved to %s)", rawURL, redirectLocation, absoluteRedirectURL)
 		return model.CrawlResult{Status: "survival", RedirectURL: absoluteRedirectURL}
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[crawler]错误: %s 的状态码非 200: %d", url, resp.StatusCode)
+		log.Printf("[crawler]错误: %s 的状态码非 200: %d", rawURL, resp.StatusCode)
 		return model.CrawlResult{Status: "error"}
 	}
-	bodyBytes, err := io.ReadAll(resp.Body)
+	limitedBody := &limitedReader{reader: resp.Body, remaining: maxHTMLResponseBytes}
+	utf8Reader, err := charset.NewReader(limitedBody, resp.Header.Get("Content-Type"))
 	if err != nil {
-		log.Printf("[crawler]读取 %s 的响应体时出错: %v", url, err)
+		log.Printf("[crawler]创建 %s 的字符集解码器时出错: %v", rawURL, err)
 		return model.CrawlResult{Status: "error"}
 	}
-	resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-	e, _, _ := charset.DetermineEncoding(bodyBytes, resp.Header.Get("Content-Type"))
-	utf8Reader := e.NewDecoder().Reader(bytes.NewBuffer(bodyBytes))
 	doc, err := goquery.NewDocumentFromReader(utf8Reader)
 	if err != nil {
-		log.Printf("[crawler]解析 %s 的 HTML 时出错: %v", url, err)
+		log.Printf("[crawler]解析 %s 的 HTML 时出错: %v", rawURL, err)
 		return model.CrawlResult{Status: "error"}
 	}
 	description := doc.Find("meta[name='description']").AttrOr("content", "")
@@ -95,7 +93,7 @@ func CrawlWebsite(url string) model.CrawlResult {
 		rssURLs = rss2URLs
 	}
 	if len(rssURLs) == 0 {
-		rssURLs = discoverCommonFeedURLs(resp.Request.URL)
+		rssURLs = discoverCommonFeedURLs(ctx, resp.Request.URL)
 	}
 
 	return model.CrawlResult{
@@ -116,7 +114,7 @@ func toAbsoluteURL(base *url.URL, href string) string {
 }
 
 // discoverCommonFeedURLs 尝试常见 RSS/Atom 地址作为兜底方案
-func discoverCommonFeedURLs(base *url.URL) []string {
+func discoverCommonFeedURLs(ctx context.Context, base *url.URL) []string {
 	if base == nil {
 		return nil
 	}
@@ -142,19 +140,11 @@ func discoverCommonFeedURLs(base *url.URL) []string {
 		if abs == "" {
 			continue
 		}
-		if isValidFeedURL(abs) {
+		feed, err := parseFeedURL(ctx, abs)
+		if err == nil && feed != nil {
 			found = append(found, abs)
 			break
 		}
 	}
 	return found
-}
-
-func isValidFeedURL(feedURL string) bool {
-	fp := newRssParser()
-	feed, err := fp.ParseURL(feedURL)
-	if err != nil || feed == nil {
-		return false
-	}
-	return true
 }

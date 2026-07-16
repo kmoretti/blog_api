@@ -4,7 +4,7 @@ import (
 	"blog_api/src/config"
 	"context"
 	"fmt"
-	"mime/multipart"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -13,12 +13,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// OSSService 定义了对象存储服务的通用接口
+// UploadInput describes a replayable object upload.
+type UploadInput struct {
+	Name        string
+	ContentType string
+	Size        int64
+	Body        io.ReadSeeker
+}
+
+// OSSService defines object storage operations.
 type OSSService interface {
-	// UploadFile 将文件上传到 OSS，并返回文件的 URL
-	// file: 文件内容
-	// header: 包含文件名等元数据的文件头
-	UploadFile(file multipart.File, header *multipart.FileHeader) (string, string, error)
+	// Upload stores input and returns its public URL and object key.
+	Upload(ctx context.Context, input UploadInput) (string, string, error)
 	// DeleteFile 从 OSS 删除文件
 	// objectKey: 文件在 OSS 中的 key
 	DeleteFile(objectKey string) error

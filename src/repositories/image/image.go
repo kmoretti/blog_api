@@ -3,6 +3,7 @@ package imageRepositories
 import (
 	"blog_api/src/model"
 	"log"
+	"math/rand/v2"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -18,7 +19,7 @@ func BatchInsertImages(db *gorm.DB, images []model.Image) error {
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "url"}},
 		DoNothing: true,
-	}).Create(&images)
+	}).CreateInBatches(&images, 256)
 
 	if result.Error != nil {
 		log.Printf("[db][image][ERR] 无法批量插入图片: %v", result.Error)
@@ -27,39 +28,6 @@ func BatchInsertImages(db *gorm.DB, images []model.Image) error {
 
 	log.Printf("[db][image] 成功插入 %d 条图片记录", result.RowsAffected)
 	return nil
-}
-
-// FilterNonExistingImages takes a slice of images and returns only those that do not exist in the database based on URL.
-func FilterNonExistingImages(db *gorm.DB, images []model.Image) ([]model.Image, error) {
-	if len(images) == 0 {
-		return images, nil
-	}
-
-	var urls []string
-	for _, img := range images {
-		urls = append(urls, img.URL)
-	}
-
-	var existingURLs []string
-	// Find all URLs from the input list that already exist in the DB
-	if err := db.Model(&model.Image{}).Where("url IN ?", urls).Pluck("url", &existingURLs).Error; err != nil {
-		return nil, err
-	}
-
-	// Create a map for faster lookup
-	existingMap := make(map[string]bool)
-	for _, url := range existingURLs {
-		existingMap[url] = true
-	}
-
-	var newImages []model.Image
-	for _, img := range images {
-		if !existingMap[img.URL] {
-			newImages = append(newImages, img)
-		}
-	}
-
-	return newImages, nil
 }
 
 // QueryImages 根据提供的选项查询图片，并返回分页结果和总数
@@ -164,8 +132,18 @@ func GetImageByID(db *gorm.DB, id int) (*model.Image, error) {
 
 // GetRandomImage retrieves a random image from the database.
 func GetRandomImage(db *gorm.DB) (*model.Image, error) {
+	var count int64
+	query := db.Model(&model.Image{}).Where("status = ?", "normal")
+	if err := query.Count(&count).Error; err != nil {
+		return nil, err
+	}
+	if count == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
 	var image model.Image
-	err := db.Where("status = ?", "normal").Order("RANDOM()").First(&image).Error
+	offset := rand.Int64N(count)
+	err := query.Order("id ASC").Offset(int(offset)).First(&image).Error
 	if err != nil {
 		log.Printf("[db][image][ERR] 无法获取随机图片: %v", err)
 		return nil, err
@@ -173,10 +151,13 @@ func GetRandomImage(db *gorm.DB) (*model.Image, error) {
 	return &image, nil
 }
 
-// ListImages retrieves all images from the database.
-func ListImages(db *gorm.DB) ([]model.Image, error) {
+// ListImagesAfterID retrieves a bounded image batch ordered by ID.
+func ListImagesAfterID(db *gorm.DB, afterID, limit int) ([]model.Image, error) {
 	var images []model.Image
-	if err := db.Find(&images).Error; err != nil {
+	if limit <= 0 {
+		return images, nil
+	}
+	if err := db.Where("id > ?", afterID).Order("id ASC").Limit(limit).Find(&images).Error; err != nil {
 		log.Printf("[db][image][ERR] 无法获取图片列表: %v", err)
 		return nil, err
 	}

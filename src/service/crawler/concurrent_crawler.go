@@ -3,6 +3,7 @@ package crawlerService
 import (
 	"blog_api/src/config"
 	"blog_api/src/model"
+	"context"
 	"log"
 	"sync"
 )
@@ -29,61 +30,82 @@ type ImageCheckJob struct {
 	Image model.Image
 }
 
-// CrawlWebsitesConcurrently 并发爬取多个网站
-// 使用 worker pool 模式，并发数量由配置文件控制
-func CrawlWebsitesConcurrently(links []model.FriendWebsite) []CrawlJobResult {
+// CrawlWebsitesConcurrently crawls links with a bounded worker pool.
+// Results are consumed synchronously so database writes retain one owner.
+func CrawlWebsitesConcurrently(ctx context.Context, links []model.FriendWebsite, consume func(CrawlJobResult) error) error {
 	if len(links) == 0 {
-		return []CrawlJobResult{}
+		return nil
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	concurrency := effectiveConcurrency(len(links))
 	log.Printf("[ConcurrentCrawler] 开始并发爬取 %d 个网站，并发数: %d", len(links), concurrency)
 
-	// 创建任务通道和结果通道
-	jobs := make(chan CrawlJob, len(links))
-	results := make(chan CrawlJobResult, len(links))
+	jobs := make(chan CrawlJob, concurrency)
+	results := make(chan CrawlJobResult, concurrency)
 
-	// 启动 worker goroutines
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
-		go crawlWorker(i, jobs, results, &wg)
+		go crawlWorker(ctx, i, jobs, results, &wg)
 	}
 
-	// 发送任务到任务通道
-	for _, link := range links {
-		jobs <- CrawlJob{Link: link}
-	}
-	close(jobs)
+	go func() {
+		defer close(jobs)
+		for _, link := range links {
+			select {
+			case jobs <- CrawlJob{Link: link}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
-	// 等待所有 worker 完成后关闭结果通道
 	go func() {
 		wg.Wait()
 		close(results)
 	}()
 
-	// 收集结果
-	var crawlResults []CrawlJobResult
+	var consumeErr error
+	processed := 0
 	for result := range results {
-		crawlResults = append(crawlResults, result)
+		if consumeErr != nil {
+			continue
+		}
+		if err := consume(result); err != nil {
+			consumeErr = err
+			cancel()
+			continue
+		}
+		processed++
 	}
 
-	log.Printf("[ConcurrentCrawler] 完成并发爬取，共处理 %d 个网站", len(crawlResults))
-	return crawlResults
+	log.Printf("[ConcurrentCrawler] 完成并发爬取，共处理 %d 个网站", processed)
+	return consumeErr
 }
 
 // crawlWorker 是 worker goroutine，从任务通道获取任务并执行爬取
-func crawlWorker(id int, jobs <-chan CrawlJob, results chan<- CrawlJobResult, wg *sync.WaitGroup) {
+func crawlWorker(ctx context.Context, id int, jobs <-chan CrawlJob, results chan<- CrawlJobResult, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	for job := range jobs {
-		log.Printf("[ConcurrentCrawler][Worker %d] 正在爬取: %s", id, job.Link.Link)
-		result := CrawlWebsite(job.Link.Link)
-		results <- CrawlJobResult{
-			Link:   job.Link,
-			Result: result,
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job, ok := <-jobs:
+			if !ok {
+				return
+			}
+			log.Printf("[ConcurrentCrawler][Worker %d] 正在爬取: %s", id, job.Link.Link)
+			result := crawlWebsite(ctx, job.Link.Link)
+			select {
+			case results <- CrawlJobResult{Link: job.Link, Result: result}:
+			case <-ctx.Done():
+				return
+			}
+			log.Printf("[ConcurrentCrawler][Worker %d] 完成爬取: %s, 状态: %s", id, job.Link.Link, result.Status)
 		}
-		log.Printf("[ConcurrentCrawler][Worker %d] 完成爬取: %s, 状态: %s", id, job.Link.Link, result.Status)
 	}
 }
 
@@ -93,24 +115,24 @@ func ParseRssFeedsConcurrently(feeds []model.FriendRss, parseFunc func(friendRss
 		return
 	}
 
-	activeFeeds := make([]model.FriendRss, 0, len(feeds))
+	activeCount := 0
 	for _, feed := range feeds {
 		if feed.Status == "pause" || feed.IsDied {
 			log.Printf("[ConcurrentCrawler] 跳过状态为 %s, is_died=%t 的 RSS 订阅源: %s", feed.Status, feed.IsDied, feed.RssURL)
 			continue
 		}
-		activeFeeds = append(activeFeeds, feed)
+		activeCount++
 	}
-	if len(activeFeeds) == 0 {
+	if activeCount == 0 {
 		log.Printf("[ConcurrentCrawler] 没有需要解析的 RSS 订阅源")
 		return
 	}
 
-	concurrency := effectiveConcurrency(len(activeFeeds))
-	log.Printf("[ConcurrentCrawler] 开始并发解析 %d 个 RSS 订阅源，并发数: %d", len(activeFeeds), concurrency)
+	concurrency := effectiveConcurrency(activeCount)
+	log.Printf("[ConcurrentCrawler] 开始并发解析 %d 个 RSS 订阅源，并发数: %d", activeCount, concurrency)
 
 	// 创建任务通道
-	jobs := make(chan RssParseJob, len(activeFeeds))
+	jobs := make(chan RssParseJob, concurrency)
 
 	// 启动 worker goroutines
 	var wg sync.WaitGroup
@@ -120,7 +142,10 @@ func ParseRssFeedsConcurrently(feeds []model.FriendRss, parseFunc func(friendRss
 	}
 
 	// 发送任务到任务通道
-	for _, feed := range activeFeeds {
+	for _, feed := range feeds {
+		if feed.Status == "pause" || feed.IsDied {
+			continue
+		}
 		jobs <- RssParseJob{
 			FriendRssID: feed.ID,
 			RssURL:      feed.RssURL,
@@ -131,7 +156,7 @@ func ParseRssFeedsConcurrently(feeds []model.FriendRss, parseFunc func(friendRss
 	// 等待所有 worker 完成
 	wg.Wait()
 
-	log.Printf("[ConcurrentCrawler] 完成并发解析 %d 个 RSS 订阅源", len(activeFeeds))
+	log.Printf("[ConcurrentCrawler] 完成并发解析 %d 个 RSS 订阅源", activeCount)
 }
 
 // rssParseWorker 是 RSS 解析的 worker goroutine
@@ -154,7 +179,7 @@ func CheckImagesConcurrently(images []model.Image, checkFunc func(image model.Im
 	concurrency := effectiveConcurrency(len(images))
 	log.Printf("[ConcurrentCrawler] 开始并发检查 %d 张图片，并发数: %d", len(images), concurrency)
 
-	jobs := make(chan ImageCheckJob, len(images))
+	jobs := make(chan ImageCheckJob, concurrency)
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)

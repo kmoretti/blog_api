@@ -12,17 +12,19 @@ import (
 	"gorm.io/gorm"
 )
 
-// NotImplemented 是一个处理尚未实现的功能的处理程序。
-func NotImplemented(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"message": "Not Implemented",
-	})
-}
+const maxRequestBodyBytes = int64(65 << 20)
 
 // SetupRouter 初始化并配置 Gin 路由器
 func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+	router.MaxMultipartMemory = 8 << 20
+	router.Use(func(c *gin.Context) {
+		if c.Request.Body != nil {
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
+		}
+		c.Next()
+	})
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     cfg.Safe.CorsAllowHostlist,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},

@@ -17,11 +17,6 @@ type UpdataHandler struct {
 	DB *gorm.DB
 }
 
-// NewUpdataHandler creates a new updata handler
-func NewUpdataHandler(db *gorm.DB) *UpdataHandler {
-	return &UpdataHandler{DB: db}
-}
-
 // CreateFriendLink handles POST /api/updata/friend request
 func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 	log.Println("[handler][updata] Received friend link creation request")

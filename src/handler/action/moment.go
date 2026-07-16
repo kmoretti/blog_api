@@ -18,11 +18,6 @@ type MomentHandler struct {
 	DB *gorm.DB
 }
 
-// NewMomentHandler creates a new moment action handler
-func NewMomentHandler(db *gorm.DB) *MomentHandler {
-	return &MomentHandler{DB: db}
-}
-
 // CreateMoment handles POST /api/action/moments request
 func (h *MomentHandler) CreateMoment(c *gin.Context) {
 	var req model.CreateMomentRequest
