@@ -16,7 +16,8 @@
         "md"
       ],
       "cors_allow_hostlist": [
-        "http://localhost:5173"
+        "http://localhost:5173",
+        "https://blog-api.2005815.xyz"
       ],
       "exclude_paths": [
         "/config"

@@ -4,6 +4,7 @@ import (
 	"blog_api/src/handler"
 	handlerAction "blog_api/src/handler/action"
 	authHandler "blog_api/src/handler/auth"
+	publicHandler "blog_api/src/handler/public"
 	"blog_api/src/middleware"
 	"blog_api/src/model"
 	"blog_api/src/service/oss"
@@ -58,6 +59,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		publicGroup := apiGroup.Group("/public")
 		{
 			publicGroup.GET("/verify_conf", verifyPublicHandler.GetVerifyConfig)
+			publicGroup.GET("/github/repository/:owner/:repo", publicHandler.GitHubRepository)
 			publicGroup.GET("/friend/", friendLinkHandler.GetAllFriendLinks)
 			publicGroup.GET("/friend/self", middleware.FriendLinkAuth(), friendLinkHandler.GetFriendLinkByEmailToken)
 			publicGroup.GET("/friend/:id", friendLinkHandler.GetFriendLinkByID)

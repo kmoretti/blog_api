@@ -132,9 +132,9 @@ Compose 配置会使用以下挂载：
 如果 GHCR 中的镜像是私有的，先使用具有 `read:packages` 权限的 GitHub Token 登录。不要把 Token 直接写在命令行参数中：
 
 ```bash
-read -rsp 'GITHUB_TOKEN: ' GITHUB_TOKEN; export GITHUB_TOKEN; echo
-printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
-unset GITHUB_TOKEN
+read -rsp 'GHCR_TOKEN: ' GHCR_TOKEN; export GHCR_TOKEN; echo
+printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+unset GHCR_TOKEN
 ```
 
 如果镜像是公开的，可以跳过登录步骤。
@@ -285,7 +285,7 @@ docker compose start blog-api
 denied: permission_denied: write_package
 ```
 
-说明 Docker 构建本身已经完成，但用于登录 GHCR 的 `GITHUB_TOKEN` 没有目标镜像包的写权限。按以下顺序检查：
+说明 Docker 构建本身已经完成，但用于推送 GHCR 的 `GITHUB_TOKEN` 没有目标镜像包的写权限。按以下顺序检查：
 
 1. 仓库的 **Settings → Actions → General → Workflow permissions** 允许工作流使用读写权限。若组织策略禁止工作流写入，需要由组织管理员调整策略。
 2. 工作流的发布任务必须包含 `packages: write` 权限。当前 `.github/workflows/docker-publish.yml` 同时在工作流和 `publish` job 中声明了该权限。
@@ -371,7 +371,36 @@ docker build --platform linux/amd64 -t blog-api:local .
 
 本项目当前的本地 Docker 构建和 Compose 运行验证不在本文档编写范围内，请以你的服务器环境实际执行结果为准。
 
-## 本地开发：启动前端管理面板
+## GitHub 仓库卡片与 API Token
+
+动态中的 GitHub 仓库卡片会通过后端代理请求 GitHub 仓库元数据，前端不会接触 GitHub Token。代理接口为：
+
+```text
+GET /api/public/github/repository/:owner/:repo
+```
+
+如果未配置 Token，卡片仍可显示仓库基础信息，但 GitHub API 使用未认证请求，容易受到较低的速率限制。建议在服务器 `.env` 中配置只读 Token：
+
+```dotenv
+GH_TOKEN="github_pat_xxxxxxxxxxxxxxxxxxxx"
+```
+
+Token 使用建议：
+
+- 使用 GitHub Fine-grained personal access token
+- 只授予访问所需公开仓库的最小读取权限
+- 不要将 Token 写入 `system_config.json`、前端变量、Dockerfile 或 Git 仓库
+- 不要将真实 Token 写入 `.env.example`
+- 当前 Compose 会通过 `env_file: ./.env` 将 Token 注入后端容器
+- 修改 Token 后重启容器使其生效：
+
+```bash
+docker compose restart blog-api
+```
+
+如果 GitHub API 请求失败，卡片会降级显示仓库路径，不会影响动态页面的其他内容。
+
+
 
 Docker 部署不需要执行以下步骤。只有在本地开发或修改前端时，才需要启动前端开发服务器：
 
@@ -411,25 +440,408 @@ pnpm run build
 
 > 脚本位于项目根目录 `../`，非 `api/` 目录下。依赖操作系统的 PowerShell 执行策略（若提示无法执行，先运行 `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`）。
 
-## 关键接口（示例）
+## API 接口文档
 
-- 公共接口：
-  - `GET /api/public/moments/`
-  - `GET /api/public/rss/`
-  - `GET /api/public/friend/`
-  - `GET /api/public/image/*id`
+### 基础信息
 
-- 管理接口（JWT）：
-  - `GET /api/action/moments`
-  - `POST /api/action/rss`
-  - `POST /api/action/image`
-  - `POST /api/action/resource/local`
+默认服务地址：
 
-- 认证相关：
-  - `POST /api/verify/passwd`
-  - `POST /api/verify/email`
-  - `POST /api/verify/turnstile`
-  - `POST /api/verify/fingerprint`
+```text
+http://localhost:10024
+```
+
+生产环境请将示例地址替换为实际域名，例如：
+
+```text
+https://blog-api.2005815.xyz
+```
+
+所有接口路径都以 `/api` 开头。接口通常返回统一结构：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+分页数据通常包含：
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+GitHub 仓库代理接口直接透传 GitHub API 的 JSON 响应，不使用上面的统一响应包装。
+
+### 认证方式
+
+#### 管理端 JWT
+
+登录成功后，从响应中的 `token` 获取 JWT：
+
+```bash
+curl -X POST http://localhost:10024/api/verify/passwd \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"你的面板密码"}'
+```
+
+后续管理接口使用：
+
+```http
+Authorization: Bearer <JWT>
+```
+
+JWT 默认有效期为 24 小时。`JWT_SECRET` 配置改变后，原有 JWT 会失效。
+
+#### Turnstile 验证
+
+Turnstile 启用后，登录或验证接口需要传递 token。支持以下位置：
+
+```http
+X-Turnstile-Token: <turnstile-token>
+```
+
+或 JSON：
+
+```json
+{
+  "turnstile_token": "<turnstile-token>"
+}
+```
+
+查询前端是否启用 Turnstile：
+
+```bash
+curl http://localhost:10024/api/public/verify_conf
+```
+
+#### 反机器人 Token 和指纹 Token
+
+部分公开接口需要反机器人 Token：
+
+```http
+X-Antibot-Token: <token>
+```
+
+也支持：
+
+```http
+Authorization: Bearer <antibot-token>
+```
+
+动态 reaction 接口还需要指纹 Token：
+
+```http
+X-Fingerprint-Token: <fingerprint-token>
+```
+
+或：
+
+```http
+Authorization: Fingerprint <fingerprint-token>
+```
+
+### 认证与验证接口
+
+| 方法 | 路径 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `POST` | `/api/verify/passwd` | Turnstile（启用时） | 管理员登录，返回 JWT |
+| `POST` | `/api/verify/email` | 反机器人 Token | 不传 `code` 时发送邮箱验证码，传 `code` 时校验邮箱验证码 |
+| `POST` | `/api/verify/turnstile` | Turnstile（启用时） | 签发验证 Token |
+| `POST` | `/api/verify/fingerprint` | 反机器人 Token | 创建或获取客户端指纹 Token |
+
+管理员登录请求：
+
+```json
+{
+  "username": "admin",
+  "password": "你的面板密码"
+}
+```
+
+邮箱验证码请求：
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+邮箱验证码校验：
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456"
+}
+```
+
+### 公开接口
+
+公开接口不需要管理员 JWT。
+
+#### 系统和 GitHub
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/public/verify_conf` | 返回 Turnstile 是否启用及前端 Site Key |
+| `GET` | `/api/public/github/repository/:owner/:repo` | 获取 GitHub 仓库元数据 |
+
+GitHub 代理示例：
+
+```bash
+curl https://blog-api.2005815.xyz/api/public/github/repository/kmoretti/blog_api
+```
+
+`:owner` 和 `:repo` 只允许字母、数字、`.`、`_`、`-`，仓库路径支持可选的 `.git` 后缀。后端会从服务器 `.env` 的 `GH_TOKEN` 读取 GitHub Token，前端不会接触该密钥。
+
+#### 动态 Moments
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/public/moments/` | 分页获取公开动态 |
+| `POST` | `/api/public/moments/:id/reactions` | 为动态添加 reaction |
+| `DELETE` | `/api/public/moments/:id/reactions` | 删除动态 reaction |
+
+动态查询参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `page` | `1` | 页码 |
+| `page_size` | `10` | 每页数量，最大 `100` |
+
+查询动态：
+
+```bash
+curl "http://localhost:10024/api/public/moments/?page=1&page_size=10"
+```
+
+reaction 类型：
+
+```text
+👍  👎  ❤  👀  💩
+```
+
+添加 reaction：
+
+```bash
+curl -X POST http://localhost:10024/api/public/moments/1/reactions \
+  -H "Content-Type: application/json" \
+  -H "X-Antibot-Token: <antibot-token>" \
+  -H "X-Fingerprint-Token: <fingerprint-token>" \
+  -d '{"reaction":"👍"}'
+```
+
+#### 友链
+
+| 方法 | 路径 | 认证 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/public/friend/` | 无 | 分页查询公开友链 |
+| `GET` | `/api/public/friend/:id` | 无 | 查询单条公开友链 |
+| `GET` | `/api/public/friend/self` | 邮箱 Token | 查询当前邮箱对应的友链 |
+| `POST` | `/api/public/friend` | 邮箱 Token 或 JWT | 自助提交友链 |
+| `PUT` | `/api/public/friend/:id` | 邮箱 Token 或 JWT | 修改自己提交的友链 |
+
+友链查询参数：
+
+```text
+status       状态筛选
+search       名称或链接搜索
+is_died      是否已失联
+page         页码，默认 1
+page_size    每页数量，默认 20，最大 1000
+```
+
+自助提交友链示例：
+
+```bash
+curl -X POST http://localhost:10024/api/public/friend \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <email-token>" \
+  -d '{
+    "name":"我的博客",
+    "link":"https://example.com",
+    "avatar":"https://example.com/avatar.png",
+    "description":"博客简介",
+    "email":"user@example.com",
+    "enable_rss":true
+  }'
+```
+
+#### RSS 与图片
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/public/rss/` | 分页获取 RSS 文章 |
+| `GET` | `/api/public/image/*id` | 获取随机图片、指定图片或图片元数据 |
+
+RSS 查询参数：
+
+```text
+rss_id          按 RSS ID 筛选
+friend_link_id  按友链 ID 筛选
+page            页码，默认 1
+page_size       每页数量，默认 10
+```
+
+图片接口行为：
+
+```text
+GET /api/public/image/
+    随机返回一张图片
+
+GET /api/public/image/123
+    返回 ID 为 123 的图片
+
+GET /api/public/image/123?type=metadata
+    返回图片元数据 JSON
+```
+
+图片默认通过 HTTP 302 跳转到最终图片 URL。
+
+### 管理接口 `/api/action`
+
+所有管理接口都需要：
+
+```http
+Authorization: Bearer <JWT>
+```
+
+#### 系统
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/status` | 获取系统状态 |
+| `PUT` | `/api/action/config` | 更新 JSON 系统配置 |
+
+#### 友链、RSS、图片
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/action/friend` | 分页获取完整友链 |
+| `GET` | `/api/action/friend/:id` | 获取单条完整友链 |
+| `POST` | `/api/action/friend` | 创建友链 |
+| `PUT` | `/api/action/friend/:id` | 更新友链 |
+| `DELETE` | `/api/action/friend/:id` | 删除友链 |
+| `GET` | `/api/action/rss` | 分页获取 RSS 配置 |
+| `POST` | `/api/action/rss` | 创建 RSS 配置 |
+| `PUT` | `/api/action/rss/:id` | 更新 RSS 配置 |
+| `DELETE` | `/api/action/rss/:id` | 删除 RSS 配置 |
+| `GET` | `/api/action/image` | 分页获取图片 |
+| `POST` | `/api/action/image` | 创建图片记录 |
+| `PUT` | `/api/action/image/:id` | 更新图片记录 |
+| `DELETE` | `/api/action/image/:id` | 删除图片记录 |
+
+创建 RSS：
+
+```json
+{
+  "rss_url": "https://example.com/feed.xml",
+  "friend_link_id": 1,
+  "name": "示例 RSS"
+}
+```
+
+#### 动态与媒体
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/action/moments` | 分页获取管理端动态 |
+| `POST` | `/api/action/moments` | 创建动态 |
+| `PUT` | `/api/action/moments/:id` | 更新动态 |
+| `DELETE` | `/api/action/moments/:id` | 删除动态 |
+| `DELETE` | `/api/action/moments/:id/reactions` | 删除动态 reaction |
+| `GET` | `/api/action/moments/media` | 分页获取动态媒体 |
+| `POST` | `/api/action/moments/media` | 创建动态媒体 |
+| `PUT` | `/api/action/moments/media/:id` | 更新动态媒体 |
+| `DELETE` | `/api/action/moments/media/:id` | 删除动态媒体 |
+
+创建动态示例：
+
+```json
+{
+  "content": "今天完成了一个功能。",
+  "tags": "开发,记录",
+  "extension": "{\"type\":\"github\",\"payload\":{\"repo_url\":\"https://github.com/kmoretti/blog_api\"}}",
+  "media": []
+}
+```
+
+#### 资源上传与删除
+
+资源接口支持本地存储和 OSS 存储：
+
+| 方法 | 路径 | 请求格式 | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/action/resource/*file_path` | - | 获取资源列表或文件内容 |
+| `POST` | `/api/action/resource/local` | `multipart/form-data` | 上传到本地存储，文件字段为 `file` |
+| `POST` | `/api/action/resource/oss` | `multipart/form-data` | 上传到 OSS，文件字段为 `file` |
+| `DELETE` | `/api/action/resource/local/*file_path` | - | 删除本地资源 |
+| `DELETE` | `/api/action/resource/oss/*file_path` | - | 删除 OSS 资源 |
+
+本地上传示例：
+
+```bash
+curl -X POST http://localhost:10024/api/action/resource/local \
+  -H "Authorization: Bearer <JWT>" \
+  -F "file=@./avatar.png" \
+  -F "path=images"
+```
+
+OSS 上传示例：
+
+```bash
+curl -X POST http://localhost:10024/api/action/resource/oss \
+  -H "Authorization: Bearer <JWT>" \
+  -F "file=@./photo.jpg" \
+  -F "path=moments"
+```
+
+#### 系统操作
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `POST` | `/api/action/system/restart` | 重启服务 |
+
+### 条件启用的内部状态接口
+
+当 `.env` 配置 `STATE_API_MASTER_PASSWORD` 非空时注册。所有接口都需要服务端状态主密码认证：
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/internal/states/:key` | 读取状态 |
+| `PUT` | `/api/internal/states/:key` | 写入状态 |
+| `DELETE` | `/api/internal/states/:key` | 删除状态 |
+
+未配置 `STATE_API_MASTER_PASSWORD` 时，这组接口不会注册。
+
+### 错误处理与调试
+
+常见 HTTP 状态码：
+
+| 状态码 | 含义 |
+| --- | --- |
+| `200` | 请求成功 |
+| `201` | 创建成功，具体接口以实现为准 |
+| `400` | 请求参数或请求体无效 |
+| `401` | 未认证或 Token 无效 |
+| `403` | 无权限、反机器人验证失败或上游拒绝 |
+| `404` | 资源或路由不存在 |
+| `429` | 请求过于频繁或上游限流 |
+| `500` | 服务端错误 |
+| `502` | 上游服务请求失败，例如 GitHub API 网络错误 |
+
+排查接口问题时先查看后端日志：
+
+```bash
+docker compose logs --tail=200 blog-api
+```
 
 ## 目录结构（简版）
 

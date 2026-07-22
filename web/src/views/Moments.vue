@@ -256,7 +256,8 @@
           <el-switch v-model="editForm.isAd" active-text="是" inactive-text="否" />
         </el-form-item>
         <el-form-item label="扩展卡片">
-          <ExtensionRenderer :extension="editForm.extension" />
+          <ExtensionEditor v-model="editForm.extension" />
+          <ExtensionRenderer v-if="editForm.extension" :extension="editForm.extension" />
         </el-form-item>
         <el-form-item label="来源链接">
           <div class="source-edit">
@@ -675,6 +676,7 @@ const handleCreateMoment = async () => {
     composer.message_link = ''
     composer.mediaItems = []
     composer.externalLinks = []
+    composer.extension = null
     reset()
     fetchMoments()
   } catch (error) {
@@ -741,7 +743,7 @@ const handleUpdateMoment = async () => {
       tags: editForm.tags || undefined,
       pinned_order: editForm.pinnedOrder || undefined,
       is_ad: editForm.isAd ? 1 : undefined,
-      extension: editForm.extension || undefined
+      extension: editForm.extension === null ? '' : editForm.extension
     })
     // 添加新上传的媒体文件
     if (editPendingMedia.value.length) {

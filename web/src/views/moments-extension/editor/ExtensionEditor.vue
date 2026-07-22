@@ -1,7 +1,7 @@
 <template>
   <div class="extension-editor">
     <div class="extension-editor-toolbar">
-      <el-select v-model="selectedType" placeholder="添加卡片" size="small" clearable style="width: 140px">
+      <el-select v-model="selectedType" placeholder="添加卡片" size="small" clearable style="width: 140px" @change="handleTypeChange">
         <el-option label="GitHub 仓库" value="github" />
         <el-option label="网站链接" value="website" />
         <el-option label="位置" value="location" />
@@ -13,7 +13,7 @@
       </el-button>
     </div>
 
-    <div v-if="selectedType && !currentValue" class="extension-editor-form">
+    <div v-if="selectedType" class="extension-editor-form">
       <template v-if="selectedType === 'github'">
         <el-input v-model="form.github.repo_url" placeholder="GitHub 仓库 URL，如 https://github.com/user/repo" size="small" />
       </template>
@@ -42,13 +42,13 @@
       </template>
 
       <div class="extension-editor-actions">
-        <el-button size="small" type="primary" @click="handleConfirm">确认</el-button>
+        <el-button size="small" type="primary" @click="handleConfirm">保存卡片</el-button>
         <el-button size="small" @click="selectedType = ''">取消</el-button>
       </div>
     </div>
 
     <div v-if="currentValue" class="extension-preview">
-      <el-tag size="small" type="info">卡片已添加</el-tag>
+      <el-tag size="small" type="info">卡片已添加，可继续编辑</el-tag>
     </div>
   </div>
 </template>
@@ -78,17 +78,54 @@ const form = reactive({
 
 watch(() => props.modelValue, (val) => {
   currentValue.value = val
+  resetForm()
   if (val) {
     try {
       const ext = JSON.parse(val) as MomentExtension
       selectedType.value = ext.type
+      fillForm(ext)
     } catch {
       selectedType.value = ''
     }
   } else {
     selectedType.value = ''
   }
-})
+}, { immediate: true })
+
+function resetForm() {
+  Object.assign(form, {
+    github: { repo_url: '' },
+    website: { title: '', site: '' },
+    location: { placeholder: '', latitude: 0, longitude: 0 },
+    music: { url: '' },
+    tweet: { url: '', username: '', status_id: '' }
+  })
+}
+
+function fillForm(ext: MomentExtension) {
+  switch (ext.type) {
+    case 'github':
+      form.github.repo_url = ext.payload.repo_url
+      break
+    case 'website':
+      form.website.title = ext.payload.title
+      form.website.site = ext.payload.site
+      break
+    case 'location':
+      form.location.placeholder = ext.payload.placeholder
+      form.location.latitude = ext.payload.latitude
+      form.location.longitude = ext.payload.longitude
+      break
+    case 'music':
+      form.music.url = ext.payload.url
+      break
+    case 'tweet':
+      form.tweet.url = ext.payload.url
+      form.tweet.username = ext.payload.username
+      form.tweet.status_id = ext.payload.status_id
+      break
+  }
+}
 
 function buildExtension(): MomentExtension | null {
   switch (selectedType.value) {
@@ -109,6 +146,15 @@ function buildExtension(): MomentExtension | null {
     default:
       return null
   }
+}
+
+function handleTypeChange(type: ExtensionType | '') {
+  if (!type) {
+    handleClear()
+    return
+  }
+  resetForm()
+  currentValue.value = null
 }
 
 function handleConfirm() {

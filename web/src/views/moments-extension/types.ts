@@ -32,10 +32,37 @@ export type ExtensionPayload =
   | MusicPayload
   | TweetPayload
 
-export interface MomentExtension {
-  type: ExtensionType
-  payload: ExtensionPayload
+export interface GithubExtension {
+  type: 'github'
+  payload: GithubPayload
 }
+
+export interface WebsiteExtension {
+  type: 'website'
+  payload: WebsitePayload
+}
+
+export interface LocationExtension {
+  type: 'location'
+  payload: LocationPayload
+}
+
+export interface MusicExtension {
+  type: 'music'
+  payload: MusicPayload
+}
+
+export interface TweetExtension {
+  type: 'tweet'
+  payload: TweetPayload
+}
+
+export type MomentExtension =
+  | GithubExtension
+  | WebsiteExtension
+  | LocationExtension
+  | MusicExtension
+  | TweetExtension
 
 export function parseExtension(json: string | undefined | null): MomentExtension | null {
   if (!json) return null
