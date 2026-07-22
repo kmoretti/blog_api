@@ -25,7 +25,8 @@ func QueryMoments(db *gorm.DB, page, pageSize int, status string) ([]model.Momen
 		query = query.Offset(offset).Limit(pageSize)
 	}
 
-	if err := query.Order("created_at desc").Find(&moments).Error; err != nil {
+	orderExpr := "CASE WHEN pinned_order > 0 THEN 0 ELSE 1 END, pinned_order ASC, id DESC"
+	if err := query.Order(orderExpr).Find(&moments).Error; err != nil {
 		return nil, 0, err
 	}
 

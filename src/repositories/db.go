@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"gorm.io/driver/sqlite"
@@ -65,12 +66,115 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 			return nil, fmt.Errorf("could not read migration file %s: %w", file, err)
 		}
 
-		// Execute the entire migration file content at once
-		if err := db.Exec(string(content)).Error; err != nil {
-			return nil, fmt.Errorf("could not execute migration statement in file %s: %w", file, err)
+		// Split by semicolons respecting BEGIN...END blocks (triggers, procedures)
+		statements := splitSQLStatements(string(content))
+		for _, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if err := db.Exec(stmt).Error; err != nil {
+				// Ignore "duplicate column" errors for ALTER TABLE (migration re-run safety)
+				if strings.Contains(err.Error(), "duplicate column name") {
+					log.Printf("[Repo]跳过已存在的列: %v", err)
+					continue
+				}
+				return nil, fmt.Errorf("could not execute migration statement in file %s: %w", file, err)
+			}
 		}
 	}
 
 	log.Println("Database migrations completed successfully.")
 	return db, nil
+}
+
+// splitSQLStatements splits SQL content by semicolons, respecting BEGIN...END blocks
+// so that trigger/procedure bodies with internal semicolons are kept intact.
+func splitSQLStatements(sql string) []string {
+	var result []string
+	depth := 0
+	start := 0
+	runes := []rune(sql)
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < len(runes); i++ {
+		ch := runes[i]
+
+		// Track line comments
+		if !inBlockComment && ch == '-' && i+1 < len(runes) && runes[i+1] == '-' {
+			inLineComment = true
+			continue
+		}
+		if inLineComment && ch == '\n' {
+			inLineComment = false
+			continue
+		}
+		if inLineComment {
+			continue
+		}
+
+		// Track block comments
+		if !inLineComment && ch == '/' && i+1 < len(runes) && runes[i+1] == '*' {
+			inBlockComment = true
+			i++ // skip *
+			continue
+		}
+		if inBlockComment && ch == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+			inBlockComment = false
+			i++ // skip /
+			continue
+		}
+		if inBlockComment {
+			continue
+		}
+
+		// Track BEGIN/END depth (case-insensitive)
+		if ch == 'B' || ch == 'b' {
+			if i+4 < len(runes) && toUpperStr(string(runes[i:i+5])) == "BEGIN" {
+				// Make sure it's a word boundary
+				if i+5 >= len(runes) || !isIdentChar(runes[i+5]) {
+					depth++
+					i += 4
+					continue
+				}
+			}
+		}
+		if ch == 'E' || ch == 'e' {
+			if i+2 < len(runes) && toUpperStr(string(runes[i:i+3])) == "END" {
+				if i+3 >= len(runes) || !isIdentChar(runes[i+3]) {
+					depth--
+					i += 2
+					continue
+				}
+			}
+		}
+
+		// Split on semicolons only when not inside BEGIN...END
+		if ch == ';' && depth == 0 {
+			stmt := strings.TrimSpace(string(runes[start : i+1]))
+			if stmt != "" {
+				result = append(result, stmt)
+			}
+			start = i + 1
+		}
+	}
+
+	// Remaining
+	if start < len(runes) {
+		stmt := strings.TrimSpace(string(runes[start:]))
+		if stmt != "" {
+			result = append(result, stmt)
+		}
+	}
+
+	return result
+}
+
+func toUpperStr(s string) string {
+	return strings.ToUpper(s)
+}
+
+func isIdentChar(ch rune) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }

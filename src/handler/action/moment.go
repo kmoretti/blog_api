@@ -162,6 +162,22 @@ func (h *MomentHandler) UpdateMoment(c *gin.Context) {
 		updates["message_link"] = *req.MessageLink
 		moment.MessageLink = *req.MessageLink
 	}
+	if req.Tags != nil {
+		updates["tags"] = *req.Tags
+		moment.Tags = *req.Tags
+	}
+	if req.PinnedOrder != nil {
+		updates["pinned_order"] = *req.PinnedOrder
+		moment.PinnedOrder = *req.PinnedOrder
+	}
+	if req.IsAd != nil {
+		updates["is_ad"] = *req.IsAd
+		moment.IsAd = *req.IsAd
+	}
+	if req.Extension != nil {
+		updates["extension"] = *req.Extension
+		moment.Extension = *req.Extension
+	}
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "no fields to update"))
 		return

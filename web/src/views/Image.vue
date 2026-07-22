@@ -10,7 +10,7 @@
         </div>
       </template>
 
-      <div class="table-actions">
+      <div class="table-actions stack-mobile">
         <el-select
           v-model="searchParams.status"
           placeholder="按状态筛选"
@@ -32,11 +32,12 @@
         />
       </div>
 
+      <div class="table-responsive">
       <el-scrollbar height="60vh">
         <el-table
           :data="images"
           v-loading="loading"
-          style="width: 100%"
+          style="width: 100%; min-width: 800px"
         >
           <el-table-column prop="id" label="ID" width="80"></el-table-column>
           <el-table-column prop="name" label="名称"></el-table-column>
@@ -78,6 +79,7 @@
           </el-table-column>
         </el-table>
       </el-scrollbar>
+      </div>
 
       <el-pagination
         background
@@ -400,7 +402,7 @@ onMounted(() => {
 }
 .image-uploader-icon {
   font-size: 28px;
-  color: #8c939d;
+  color: var(--el-text-color-secondary);
 }
 .preview-image {
   width: 100%;

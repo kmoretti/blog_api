@@ -1,11 +1,15 @@
 export interface Moment {
   id: number
   content: string
+  extension?: string
   status: 'visible' | 'hidden' | 'deleted'
   guild_id?: number
   channel_id?: number
   message_id?: number
   message_link?: string
+  tags?: string
+  pinned_order?: number
+  is_ad?: number
   created_at: number
   updated_at: number
 }
@@ -39,19 +43,28 @@ export interface MomentListParams {
 
 export interface CreateMomentPayload {
   content: string
+  extension?: string
   media: Array<{
     media_url: string
     media_type: 'image' | 'video'
+    is_local?: number
   }>
   guild_id?: number
   channel_id?: number
   message_id?: number
   message_link?: string
+  tags?: string
+  pinned_order?: number
+  is_ad?: number
 }
 
 export interface UpdateMomentPayload {
   content?: string
   status?: 'visible' | 'hidden' | 'deleted'
+  tags?: string
+  pinned_order?: number
+  is_ad?: number
+  extension?: string
   message_link?: string
 }
 

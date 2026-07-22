@@ -11,7 +11,7 @@
       </template>
 
       <!-- Filter and Actions -->
-      <div class="table-actions">
+      <div class="table-actions stack-mobile">
         <el-select v-model="filterIsDied" placeholder="按失效状态筛选" clearable @change="handleFilter"
           style="width: 150px; margin-right: 10px">
           <el-option label="已失效" :value="true"></el-option>
@@ -30,8 +30,9 @@
       </div>
 
       <!-- Friend Link Table -->
+        <div class="table-responsive">
         <el-scrollbar height="60vh">
-          <el-table :data="friendLinks" v-loading="loading" style="width: 100%">
+          <el-table :data="friendLinks" v-loading="loading" style="width: 100%; min-width: 900px">
             <el-table-column prop="name" label="网站名称" width="180" />
             <el-table-column prop="link" label="链接">
               <template #default="{ row }">
@@ -60,6 +61,18 @@
                 <el-switch :model-value="row.enable_rss" @change="handleRssToggle(row)" />
               </template>
             </el-table-column>
+            <el-table-column prop="snapshot" label="封面" width="180">
+              <template #default="{ row }">
+                <el-image v-if="row.snapshot" :src="row.snapshot" fit="cover" style="width: 80px; height: 45px; border-radius: 4px;" />
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="feed" label="RSS" width="200">
+              <template #default="{ row }">
+                <a v-if="row.feed" :href="row.feed" target="_blank" style="color: var(--el-color-primary);">{{ row.feed }}</a>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link :icon="Edit" @click="openFormDialog(row)">
@@ -72,6 +85,7 @@
             </el-table-column>
           </el-table>
         </el-scrollbar>
+      </div>
 
       <!-- Pagination -->
       <el-pagination background layout="total, sizes, prev, pager, next, jumper" :total="totalLinks"
@@ -99,6 +113,15 @@
         </el-form-item>
         <el-form-item label="订阅 RSS" prop="enable_rss">
           <el-switch v-model="form.enable_rss" />
+        </el-form-item>
+        <el-form-item label="网站封面">
+          <el-input v-model="form.snapshot" placeholder="封面图片 URL" />
+        </el-form-item>
+        <el-form-item label="友链页面">
+          <el-input v-model="form.friend_link_page" placeholder="https://example.com/links" />
+        </el-form-item>
+        <el-form-item label="博客 RSS">
+          <el-input v-model="form.feed" placeholder="RSS 订阅地址" />
         </el-form-item>
         <el-form-item label="是否失效" prop="is_died" v-if="isEditMode">
           <el-switch v-model="form.is_died" />
@@ -158,6 +181,9 @@ const form = reactive<{
   times: number
   status: 'survival' | 'timeout' | 'error' | 'pending' | 'ignored'
   enable_rss: boolean
+  snapshot: string
+  friend_link_page: string
+  feed: string
   is_died: boolean
 }>({
   id: 0,
@@ -169,6 +195,9 @@ const form = reactive<{
   times: 0,
   status: 'pending',
   enable_rss: true,
+  snapshot: '',
+  friend_link_page: '',
+  feed: '',
   is_died: false
 })
 
@@ -244,6 +273,9 @@ const resetForm = () => {
     times: 0,
     status: 'pending',
     enable_rss: true,
+    snapshot: '',
+    friend_link_page: '',
+    feed: '',
     is_died: false
   })
 }
@@ -264,7 +296,10 @@ const submitForm = async () => {
             avatar: form.avatar,
             description: form.description,
             email: form.email,
-            enable_rss: form.enable_rss
+            enable_rss: form.enable_rss,
+            snapshot: form.snapshot || undefined,
+            friend_link_page: form.friend_link_page || undefined,
+            feed: form.feed || undefined,
           }
           await createFriendLink(payload)
           ElMessage.success('创建成功')
@@ -363,5 +398,13 @@ const handleRssToggle = async (link: FriendLink) => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .friend-link-container .table-actions > * {
+    width: 100% !important;
+    margin-right: 0 !important;
+  }
 }
 </style>

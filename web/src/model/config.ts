@@ -7,6 +7,7 @@ export interface SystemConfig {
     oss_conf: OSSConfig;
     verify_conf: VerifyConfig;
     email_conf: EmailConfig;
+    pwa_conf: PwaConfig;
   };
 }
 
@@ -105,4 +106,8 @@ export interface DiscordConfig {
   guild_id: string;
   channel_id: string;
   filter_userid: string[];
+}
+
+export interface PwaConfig {
+  enable: boolean;
 }

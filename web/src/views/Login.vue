@@ -41,6 +41,8 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { authApi } from '@/api/auth'
+import { useTheme } from '@/composables/useTheme'
+const { initTheme } = useTheme()
 
 type TurnstileConfig = {
   enable?: boolean
@@ -167,6 +169,7 @@ const handleLogin = async () => {
 }
 
 onMounted(async () => {
+  initTheme()
   await loadTurnstileConfig()
   if (turnstileEnabled.value && turnstileSiteKey.value) {
     loadTurnstileScript()
@@ -208,13 +211,19 @@ const handleForgotPassword = () => {
 
 .login-card {
   width: 400px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  background-color: rgba(255, 255, 255, 0.85);
-  /* Semi-transparent background */
-  backdrop-filter: blur(10px);
-  /* Frosted glass effect */
-  border-radius: 12px;
+  max-width: 90vw;
+  box-shadow: var(--shadow);
+  background: var(--paper);
+  border-radius: var(--radius-handdrawn);
   padding: 1rem;
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 767px) {
+  .login-card {
+    padding: 0.75rem;
+    border-radius: var(--radius-handdrawn-wide);
+  }
 }
 
 .extra-links {
@@ -229,7 +238,7 @@ const handleForgotPassword = () => {
 
 .card-header h2 {
   margin: 0;
-  color: #333;
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -240,7 +249,7 @@ const handleForgotPassword = () => {
 }
 
 .form-item-help {
-  color: #909399;
+  color: var(--muted);
   font-size: 12px;
   margin-top: 4px;
   line-height: 1.2;

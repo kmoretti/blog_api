@@ -4,6 +4,10 @@ package model
 type Moment struct {
 	ID          int    `json:"id" gorm:"column:id;primaryKey"`
 	Content     string `json:"content" gorm:"column:content"`
+	Tags        string `json:"tags" gorm:"column:tags"`
+	PinnedOrder int    `json:"pinned_order" gorm:"column:pinned_order"`
+	IsAd        int    `json:"is_ad" gorm:"column:is_ad"`
+	Extension   string `json:"extension,omitempty" gorm:"column:extension"`
 	Status      string `json:"status" gorm:"column:status"`
 	GuildID     int64  `json:"guild_id,omitempty" gorm:"column:guild_id"`
 	ChannelID   int64  `json:"channel_id,omitempty" gorm:"column:channel_id"`

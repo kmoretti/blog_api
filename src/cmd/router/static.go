@@ -11,9 +11,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var statFile = os.Stat
+
 func staticFileHandler(cfg *model.Config) gin.HandlerFunc {
 	baseDir := resolveStaticBaseDir(cfg)
+	panelDir := resolvePanelDir()
 	absBaseDir, _ := filepath.Abs(baseDir)
+	absPanelDir, _ := filepath.Abs(panelDir)
 
 	return func(c *gin.Context) {
 		reqPath, ok := normalizeRequestPath(c.Request.URL.Path)
@@ -39,31 +43,43 @@ func staticFileHandler(cfg *model.Config) gin.HandlerFunc {
 			}
 		}
 
-		if cfg.Data.Database.Path != "" {
-			dbFileName := filepath.Base(cfg.Data.Database.Path)
-			if reqPath == "/"+dbFileName || reqPath == "/"+dbFileName+"/" {
-				c.String(http.StatusForbidden, "Forbidden")
-				return
-			}
-		}
-
-		fsPath := filepath.Join(baseDir, strings.TrimPrefix(reqPath, "/"))
-		if !isWithinBaseDir(fsPath, absBaseDir) {
+		if isProtectedDatabasePath(reqPath, cfg.Data.Database.Path, absBaseDir) {
 			c.String(http.StatusForbidden, "Forbidden")
 			return
 		}
 
-		info, err := os.Stat(fsPath)
+		requestBaseDir := baseDir
+		requestAbsBaseDir := absBaseDir
+		requestPath := strings.TrimPrefix(reqPath, "/")
+		isPanelPath := reqPath == "/panel" || strings.HasPrefix(reqPath, "/panel/")
+		if isPanelPath {
+			requestBaseDir = panelDir
+			requestAbsBaseDir = absPanelDir
+			requestPath = strings.TrimPrefix(strings.TrimPrefix(reqPath, "/panel"), "/")
+		}
+
+		fsPath := filepath.Join(requestBaseDir, requestPath)
+		if !isWithinBaseDir(fsPath, requestAbsBaseDir) {
+			c.String(http.StatusForbidden, "Forbidden")
+			return
+		}
+
+		info, err := statFile(fsPath)
 
 		if os.IsNotExist(err) {
-			if strings.HasPrefix(reqPath, "/panel/") {
-				spaIndex := filepath.Join(baseDir, "panel", "index.html")
+			if isPanelPath {
+				spaIndex := filepath.Join(panelDir, "index.html")
 				if _, err := os.Stat(spaIndex); err == nil {
 					c.File(spaIndex)
 					return
 				}
 			}
 			c.String(http.StatusNotFound, "Not Found")
+			return
+		}
+
+		if err != nil {
+			c.String(http.StatusInternalServerError, "Internal Server Error")
 			return
 		}
 
@@ -93,11 +109,28 @@ func resolveStaticBaseDir(cfg *model.Config) string {
 	return filepath.Clean(baseDir)
 }
 
+func resolvePanelDir() string {
+	panelDir := strings.TrimSpace(os.Getenv("PANEL_ROOT"))
+	if panelDir == "" {
+		panelDir = filepath.Join("data", "panel")
+	}
+
+	return filepath.Clean(panelDir)
+}
+
 func normalizeRequestPath(raw string) (string, bool) {
 	if strings.Contains(raw, "\x00") {
 		return "", false
 	}
-	cleaned := path.Clean("/" + strings.ReplaceAll(raw, "\\", "/"))
+
+	normalized := strings.ReplaceAll(raw, "\\", "/")
+	for _, segment := range strings.Split(normalized, "/") {
+		if segment == "." || segment == ".." {
+			return "", false
+		}
+	}
+
+	cleaned := path.Clean("/" + normalized)
 	if !strings.HasPrefix(cleaned, "/") {
 		return "", false
 	}
@@ -114,14 +147,43 @@ func hasHiddenPathSegment(reqPath string) bool {
 	return false
 }
 
+func isProtectedDatabasePath(reqPath, databasePath, absBaseDir string) bool {
+	if databasePath == "" {
+		return false
+	}
+
+	absDatabasePath, err := filepath.Abs(databasePath)
+	if err != nil {
+		return false
+	}
+
+	relativeDatabasePath, err := filepath.Rel(absBaseDir, absDatabasePath)
+	if err != nil || relativeDatabasePath == "." || filepath.IsAbs(relativeDatabasePath) || relativeDatabasePath == ".." || strings.HasPrefix(relativeDatabasePath, ".."+string(filepath.Separator)) {
+		return false
+	}
+
+	databaseRequestPath := "/" + filepath.ToSlash(relativeDatabasePath)
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+		if reqPath == databaseRequestPath+suffix {
+			return true
+		}
+	}
+	return false
+}
+
 func isWithinBaseDir(targetPath, absBaseDir string) bool {
 	absTargetPath, err := filepath.Abs(targetPath)
 	if err != nil {
 		return false
 	}
 
-	baseWithSep := absBaseDir + string(filepath.Separator)
-	if absTargetPath != absBaseDir && !strings.HasPrefix(absTargetPath, baseWithSep) {
+	resolvedBaseDir, err := filepath.EvalSymlinks(absBaseDir)
+	if err != nil {
+		resolvedBaseDir = absBaseDir
+	}
+
+	baseWithSep := resolvedBaseDir + string(filepath.Separator)
+	if absTargetPath != absBaseDir && !strings.HasPrefix(absTargetPath, absBaseDir+string(filepath.Separator)) {
 		return false
 	}
 
@@ -130,5 +192,5 @@ func isWithinBaseDir(targetPath, absBaseDir string) bool {
 		return true
 	}
 
-	return resolvedPath == absBaseDir || strings.HasPrefix(resolvedPath, baseWithSep)
+	return resolvedPath == resolvedBaseDir || strings.HasPrefix(resolvedPath, baseWithSep)
 }

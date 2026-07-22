@@ -1,0 +1,289 @@
+/* ========== FlatPaper Paper Theme ========== */
+/* Light mode (default) */
+:root {
+  --bg: #f7f3e9;
+  --paper: #fffdf6;
+  --paper-solid: #ffffff;
+  --paper-warm: #f8f2e2;
+  --ink: #2c3531;
+  --ink-soft: #4a5751;
+  --muted: #8a8678;
+  --line: #ece3d0;
+  --dash: #ddd0b5;
+  --color-accent: #6fa67c;
+  --color-accent-strong: #4f8862;
+  --color-accent-soft: #d8e8d2;
+  --color-accent-muted: #8ab98d;
+  --tape-yellow: rgba(238, 201, 110, 0.72);
+  --tape-pink: rgba(232, 168, 158, 0.62);
+  --tape-stripes: repeating-linear-gradient(45deg, rgba(255,255,255,0.25) 0 2px, transparent 2px 7px);
+  --paper-shadow-rgb: 82, 64, 38;
+  --shadow: 0 18px 38px rgba(var(--paper-shadow-rgb), 0.13);
+  --small-shadow: 0 10px 22px rgba(var(--paper-shadow-rgb), 0.1);
+  --soft-shadow: 0 4px 14px rgba(var(--paper-shadow-rgb), 0.08);
+  --radius-handdrawn: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  --radius-handdrawn-wide: 255px 18px 225px 18px / 18px 225px 18px 255px;
+
+  /* Element Plus overrides - light */
+  --el-bg-color: var(--paper);
+  --el-bg-color-overlay: var(--paper-warm);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-soft);
+  --el-text-color-secondary: var(--muted);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line);
+  --el-border-color-lighter: var(--dash);
+  --el-color-primary: var(--color-accent);
+  --el-color-primary-light-3: var(--color-accent-muted);
+  --el-color-primary-light-5: var(--color-accent-soft);
+  --el-color-primary-light-7: var(--color-accent-soft);
+  --el-color-primary-light-8: var(--color-accent-soft);
+  --el-color-primary-light-9: var(--color-accent-soft);
+  --el-color-primary-dark-2: var(--color-accent-strong);
+  --el-fill-color: #f5f0e6;
+  --el-fill-color-light: #faf6ef;
+  --el-fill-color-lighter: #fdfbf6;
+  --el-bg-color-page: var(--bg);
+  --el-border-radius-base: 4px;
+  --el-menu-bg-color: var(--paper);
+  --el-menu-text-color: var(--ink);
+  --el-menu-active-color: var(--color-accent);
+  --el-menu-hover-bg-color: var(--color-accent-soft);
+  --el-card-bg-color: var(--paper);
+  --el-header-bg-color: var(--paper);
+
+  color-scheme: light;
+}
+
+/* Dark mode */
+.dark-mode {
+  --bg: #15171c;
+  --paper: #1d2027;
+  --paper-solid: #232732;
+  --paper-warm: #272b34;
+  --ink: #e6e8ee;
+  --ink-soft: #aab0bd;
+  --muted: #797f8c;
+  --line: rgba(225, 230, 245, 0.12);
+  --dash: rgba(225, 230, 245, 0.22);
+  --color-accent: #82bf90;
+  --color-accent-strong: #6ba87c;
+  --color-accent-soft: #354a3a;
+  --color-accent-muted: #94c89a;
+  --tape-yellow: rgba(214, 168, 80, 0.5);
+  --tape-pink: rgba(196, 130, 118, 0.45);
+  --tape-stripes: repeating-linear-gradient(45deg, rgba(0,0,0,0.15) 0 2px, transparent 2px 7px);
+  --paper-shadow-rgb: 0, 0, 0;
+  --shadow: 0 18px 45px rgba(var(--paper-shadow-rgb), 0.35);
+  --small-shadow: 0 10px 22px rgba(var(--paper-shadow-rgb), 0.26);
+  --soft-shadow: 0 4px 14px rgba(var(--paper-shadow-rgb), 0.2);
+
+  /* Element Plus overrides - dark */
+  --el-bg-color: var(--paper);
+  --el-bg-color-overlay: var(--paper-warm);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink-soft);
+  --el-text-color-secondary: var(--muted);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line);
+  --el-border-color-lighter: var(--dash);
+  --el-color-primary: var(--color-accent);
+  --el-color-primary-light-3: var(--color-accent-muted);
+  --el-color-primary-light-5: var(--color-accent-soft);
+  --el-color-primary-light-7: var(--color-accent-soft);
+  --el-color-primary-light-8: var(--color-accent-soft);
+  --el-color-primary-light-9: var(--color-accent-soft);
+  --el-color-primary-dark-2: var(--color-accent-strong);
+  --el-fill-color: #262a33;
+  --el-fill-color-light: #2a2e38;
+  --el-fill-color-lighter: #2e3340;
+  --el-bg-color-page: var(--bg);
+  --el-menu-bg-color: var(--paper);
+  --el-menu-text-color: var(--ink);
+  --el-menu-active-color: var(--color-accent);
+  --el-menu-hover-bg-color: var(--color-accent-soft);
+  --el-card-bg-color: var(--paper);
+  --el-header-bg-color: var(--paper);
+
+  color-scheme: dark;
+}
+
+/* ========== Global styles ========== */
+html {
+  background: var(--bg);
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* Background grid texture (notebook paper) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(89, 62, 30, 0.034) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(89, 62, 30, 0.023) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.dark-mode body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.017) 1px, transparent 1px);
+}
+
+/* Grain overlay */
+.page-grain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.3;
+  background-image:
+    linear-gradient(rgba(70, 50, 30, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(70, 50, 30, 0.025) 1px, transparent 1px);
+  background-size: 18px 18px, 22px 22px;
+  mask-image: linear-gradient(to bottom, transparent, #000 7%, #000 92%, transparent);
+}
+
+.dark-mode .page-grain {
+  opacity: 0.15;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+}
+
+/* Text selection */
+::selection {
+  color: var(--ink);
+  background: var(--color-accent-soft);
+}
+
+/* Hand-drawn border radius utility */
+.handdrawn {
+  border-radius: var(--radius-handdrawn);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--dash);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ========== Universal Element Plus dark mode overrides ========== */
+/* Target ALL Element Plus component root elements */
+.dark-mode [class^="el-"],
+.dark-mode [class*=" el-"] {
+  background-color: var(--paper) !important;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+}
+
+/* Exclude icons from background override (they should stay transparent) */
+.dark-mode .el-icon,
+.dark-mode [class^="el-icon-"],
+.dark-mode [class*=" el-icon-"] {
+  background-color: transparent !important;
+}
+
+/* Keep badge, tag, and alert accent colors */
+.dark-mode .el-tag,
+.dark-mode .el-alert,
+.dark-mode .el-badge {
+  background-color: revert !important;
+}
+
+/* Switch: restore visibility in dark mode */
+.dark-mode .el-switch {
+  background-color: transparent !important;
+}
+.dark-mode .el-switch__core {
+  background-color: var(--el-switch-off-color, #414853) !important;
+  border-color: transparent !important;
+}
+.dark-mode .el-switch.is-checked .el-switch__core {
+  background-color: var(--el-switch-on-color, var(--color-accent)) !important;
+}
+.dark-mode .el-switch__action {
+  background-color: #c8ccd4 !important;
+}
+
+/* Table special overrides */
+.dark-mode .el-table__body tr:hover > td {
+  background-color: var(--color-accent-soft) !important;
+}
+
+.dark-mode .el-table__body tr.el-table__row--striped td {
+  background-color: var(--paper-warm) !important;
+}
+
+/* Exclude table header from full override */
+.dark-mode .el-table__header th {
+  background-color: var(--paper-warm) !important;
+}
+
+/* Keep drawer/overlay backdrop */
+.dark-mode .el-overlay {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Menu active/hover states */
+.dark-mode .el-menu-item:hover {
+  background-color: var(--color-accent-soft) !important;
+}
+
+.dark-mode .el-menu-item.is-active {
+  background-color: var(--color-accent-soft) !important;
+  color: var(--color-accent) !important;
+}
+
+/* Divider line color (not border) */
+.dark-mode .el-divider {
+  border-top-color: var(--line) !important;
+  background-color: transparent !important;
+}
+
+/* ========== Responsive Utilities ========== */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767px) {
+  .hide-mobile { display: none !important; }
+}
+
+@media (min-width: 768px) {
+  .hide-desktop { display: none !important; }
+}
+
+@media (max-width: 767px) {
+  .full-width-mobile { width: 100% !important; }
+  .stack-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stack-mobile > * { width: 100% !important; margin-right: 0 !important; }
+}

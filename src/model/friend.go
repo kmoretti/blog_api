@@ -12,7 +12,10 @@ type FriendWebsite struct {
 	Status    string `json:"status,omitempty" gorm:"column:status"`
 	IsDied    bool   `json:"is_died,omitempty" gorm:"column:is_died"`
 	EnableRss bool   `json:"enable_rss,omitempty" gorm:"column:enable_rss"`
-	UpdatedAt int64  `json:"updated_at,omitempty" gorm:"column:updated_at"`
+	UpdatedAt     int64  `json:"updated_at,omitempty" gorm:"column:updated_at"`
+	Snapshot       string `json:"snapshot,omitempty" gorm:"column:snapshot"`
+	FriendLinkPage string `json:"friend_link_page,omitempty" gorm:"column:friend_link_page"`
+	Feed           string `json:"feed,omitempty" gorm:"column:feed"`
 }
 
 // TableName sets the insert table name for this struct type.

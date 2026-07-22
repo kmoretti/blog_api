@@ -13,6 +13,9 @@ export interface FriendLink {
   email?: string
   times?: number
   updated_at: number
+  snapshot?: string
+  friend_link_page?: string
+  feed?: string
 }
 
 /**
@@ -46,6 +49,9 @@ export interface CreateFriendLinkPayload {
   description?: string
   email?: string
   enable_rss?: boolean
+  snapshot?: string
+  friend_link_page?: string
+  feed?: string
 }
 
 /**

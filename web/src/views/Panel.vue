@@ -1,14 +1,18 @@
 <template>
   <el-container class="panel-container">
     <el-header class="panel-header">
+      <div class="tape tape--header-left" />
       <div class="header-left">
-        <h2>Blog API 管理面板</h2>
+        <el-button v-if="isMobile" class="hide-desktop menu-btn" :icon="Operation"
+          @click="drawerVisible = true" />
+        <h2>Blog API</h2>
       </div>
       <div class="header-right">
+        <ThemeToggle />
         <el-dropdown @command="handleCommand">
           <span class="user-info">
             <el-icon><User /></el-icon>
-            <span>{{ username }}</span>
+            <span class="hide-mobile">{{ username }}</span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
@@ -23,9 +27,11 @@
     </el-header>
 
     <el-container>
-      <el-aside width="200px" class="panel-aside">
+      <!-- Desktop / Tablet sidebar -->
+      <el-aside v-if="!isMobile" :width="asideWidth" class="panel-aside">
         <el-menu
           :default-active="activeMenu"
+          :collapse="isTablet"
           class="sidebar-menu"
           @select="handleMenuSelect"
         >
@@ -60,6 +66,42 @@
         </el-menu>
       </el-aside>
 
+      <!-- Mobile drawer -->
+      <el-drawer v-model="drawerVisible" direction="ltr" size="220px"
+        :with-header="false" :modal="true">
+        <el-menu :default-active="activeMenu" @select="handleDrawerSelect"
+          class="sidebar-menu">
+          <el-menu-item index="dashboard">
+            <el-icon><HomeFilled /></el-icon>
+            <span>仪表板</span>
+          </el-menu-item>
+          <el-menu-item index="moments">
+            <el-icon><ChatLineRound /></el-icon>
+            <span>我的动态</span>
+          </el-menu-item>
+          <el-menu-item index="friend">
+            <el-icon><Link /></el-icon>
+            <span>友链管理</span>
+          </el-menu-item>
+          <el-menu-item index="rss">
+            <el-icon><Document /></el-icon>
+            <span>RSS 管理</span>
+          </el-menu-item>
+          <el-menu-item index="image">
+            <el-icon><Picture /></el-icon>
+            <span>图片管理</span>
+          </el-menu-item>
+          <el-menu-item index="resource">
+            <el-icon><FolderOpened /></el-icon>
+            <span>本地资源</span>
+          </el-menu-item>
+          <el-menu-item index="settings">
+            <el-icon><Setting /></el-icon>
+            <span>系统设置</span>
+          </el-menu-item>
+        </el-menu>
+      </el-drawer>
+
       <el-main class="panel-main">
         <router-view />
       </el-main>
@@ -68,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import {
@@ -80,8 +122,24 @@ import {
   Document,
   Setting,
   Picture,
-  FolderOpened
+  FolderOpened,
+  Operation
 } from '@element-plus/icons-vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
+import { useTheme } from '@/composables/useTheme'
+
+const { initTheme } = useTheme()
+
+const breakpoint = reactive({ width: window.innerWidth })
+const isMobile = computed(() => breakpoint.width < 768)
+const isTablet = computed(() => breakpoint.width >= 768 && breakpoint.width < 1024)
+const asideWidth = computed(() => isTablet.value ? '64px' : '200px')
+const drawerVisible = ref(false)
+
+const handleDrawerSelect = (index: string) => {
+  drawerVisible.value = false
+  router.push(`/${index}`)
+}
 
 const router = useRouter()
 const route = useRoute()
@@ -92,7 +150,10 @@ const activeMenu = computed(() => {
 })
 
 onMounted(() => {
+  initTheme()
   username.value = localStorage.getItem('username') || '管理员'
+  const handler = () => { breakpoint.width = window.innerWidth }
+  window.addEventListener('resize', handler)
 })
 
 const handleMenuSelect = (index: string) => {
@@ -125,20 +186,24 @@ const handleCommand = (command: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
-  border-bottom: 1px solid #e4e7ed;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
   padding: 0 20px;
+  box-shadow: var(--soft-shadow);
+  position: relative;
+  z-index: 10;
 }
 
 .header-left h2 {
   margin: 0;
   font-size: 20px;
-  color: #303133;
+  color: var(--ink);
 }
 
 .header-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
 .user-info {
@@ -149,15 +214,16 @@ const handleCommand = (command: string) => {
   padding: 8px 12px;
   border-radius: 4px;
   transition: background 0.3s;
+  color: var(--ink);
 }
 
 .user-info:hover {
-  background: #f5f7fa;
+  background: var(--color-accent-soft);
 }
 
 .panel-aside {
-  background: #fff;
-  border-right: 1px solid #e4e7ed;
+  background: var(--paper);
+  border-right: 1px solid var(--line);
 }
 
 .sidebar-menu {
@@ -165,40 +231,52 @@ const handleCommand = (command: string) => {
 }
 
 .panel-main {
-  background: #f0f2f5;
+  background: var(--bg);
   padding: 6px;
   overflow-y: auto;
 }
 
-.welcome-card {
-  max-width: 1200px;
-  margin: 0 auto;
+/* Tape decoration on header */
+.tape {
+  position: absolute;
+  z-index: -1;
+  width: 70px;
+  height: 20px;
+  background-color: var(--tape-pink);
+  background-image: var(--tape-stripes);
+  filter: saturate(0.88);
+  pointer-events: none;
 }
 
-.welcome-card h3 {
-  margin: 0 0 16px 0;
-  color: #303133;
-  font-size: 24px;
+.tape--header-left {
+  top: -8px;
+  left: 40px;
+  transform: rotate(-4deg);
 }
 
-.welcome-card p {
-  color: #606266;
-  margin: 0 0 16px 0;
+/* Mobile menu button */
+.menu-btn {
+  font-size: 18px;
+  padding: 8px;
+  margin-right: 4px;
+  background: transparent;
+  border: none;
+  color: var(--ink);
 }
 
-.info-section h4 {
-  color: #303133;
-  margin: 0 0 12px 0;
+/* Drawer menu */
+.el-drawer .sidebar-menu {
+  border-right: none;
+  height: 100%;
 }
 
-.info-section ul {
-  margin: 0;
-  padding-left: 20px;
-  color: #606266;
-  line-height: 1.8;
-}
-
-.stats-section {
-  margin-top: 16px;
+/* Responsive header */
+@media (max-width: 767px) {
+  .panel-header {
+    padding: 0 12px;
+  }
+  .header-left h2 {
+    font-size: 16px;
+  }
 }
 </style>

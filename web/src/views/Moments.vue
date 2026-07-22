@@ -44,7 +44,43 @@
         >
           <el-button size="small" :loading="uploading">上传图片/视频</el-button>
         </el-upload>
+        <el-button size="small" @click="showComposerExternalInput = true">外链</el-button>
         <span class="upload-hint">先本地预览，发布时再上传</span>
+      </div>
+
+      <div class="composer-meta-bar">
+        <el-input
+          v-model="composer.tags"
+          placeholder="标签，逗号分隔，如 #日常,#吐槽"
+          size="small"
+          clearable
+          class="meta-tags-input"
+        />
+        <el-input-number
+          v-model="composer.pinnedOrder"
+          :min="0"
+          size="small"
+          controls-position="right"
+          class="meta-pinned-input"
+        />
+        <el-switch
+          v-model="composer.isAd"
+          active-text="广告"
+          inactive-text="普通"
+          size="small"
+        />
+      </div>
+
+      <ExtensionEditor v-model="composer.extension" />
+
+      <div v-if="showComposerExternalInput" class="external-link-input">
+        <el-input v-model="composer.externalUrl" placeholder="粘贴外部图片/视频 URL" size="small" class="el-input-url" clearable />
+        <el-select v-model="composer.externalType" size="small" style="width: 90px">
+          <el-option label="图片" value="image" />
+          <el-option label="视频" value="video" />
+        </el-select>
+        <el-button size="small" type="primary" @click="handleAddComposerExternalLink">添加</el-button>
+        <el-button size="small" @click="closeComposerExternalInput">取消</el-button>
       </div>
 
       <div v-if="composer.mediaItems.length" class="media-grid">
@@ -62,6 +98,25 @@
             <span>视频</span>
           </div>
           <el-button link type="danger" @click="removeComposerMedia(index)">移除</el-button>
+        </div>
+      </div>
+      <!-- 外链预览 -->
+      <div v-if="composer.externalLinks.length" class="media-grid">
+        <div v-for="(link, index) in composer.externalLinks" :key="'ext-'+index" class="media-item">
+          <el-image
+            v-if="link.media_type === 'image'"
+            :src="link.media_url"
+            fit="cover"
+            class="media-thumb"
+            :preview-src-list="[link.media_url]"
+            preview-teleported
+          />
+          <div v-else class="media-video">
+            <el-icon><VideoCamera /></el-icon>
+            <span>视频</span>
+          </div>
+          <el-tag size="small" type="warning">外链</el-tag>
+          <el-button link type="danger" @click="removeComposerExternalLink(index)">移除</el-button>
         </div>
       </div>
     </el-card>
@@ -113,7 +168,19 @@
               </div>
 
               <div class="moment-body">
+                <div v-if="moment.tags || (moment.pinned_order ?? 0) > 0 || moment.is_ad" class="moment-tags-row">
+                  <el-tag v-if="(moment.pinned_order ?? 0) > 0" size="small" type="warning">📌 置顶</el-tag>
+                  <el-tag v-if="moment.is_ad" size="small" type="danger">广告</el-tag>
+                  <el-tag
+                    v-for="tag in (moment.tags || '').split(',').filter(t => t.trim())"
+                    :key="tag"
+                    size="small"
+                    type="info"
+                    effect="plain"
+                  >{{ tag.trim() }}</el-tag>
+                </div>
                 <div class="moment-content">{{ moment.content }}</div>
+                <ExtensionRenderer :extension="moment.extension" />
                 
                 <div class="moment-footer">
                   <div class="moment-info">
@@ -179,6 +246,18 @@
             <el-option label="已删除" value="deleted" />
           </el-select>
         </el-form-item>
+        <el-form-item label="标签">
+          <el-input v-model="editForm.tags" placeholder="逗号分隔，如 #日常,#吐槽" />
+        </el-form-item>
+        <el-form-item label="置顶排序">
+          <el-input-number v-model="editForm.pinnedOrder" :min="0" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="广告标记">
+          <el-switch v-model="editForm.isAd" active-text="是" inactive-text="否" />
+        </el-form-item>
+        <el-form-item label="扩展卡片">
+          <ExtensionRenderer :extension="editForm.extension" />
+        </el-form-item>
         <el-form-item label="来源链接">
           <div class="source-edit">
             <el-input v-model="editForm.message_link" placeholder="https://..." />
@@ -216,7 +295,17 @@
             >
               <el-button size="small" :loading="uploading">添加媒体</el-button>
             </el-upload>
+            <el-button size="small" @click="showEditExternalInput = true">外链</el-button>
             <span class="upload-hint">先本地预览，保存时再上传</span>
+          </div>
+          <div v-if="showEditExternalInput" class="external-link-input">
+            <el-input v-model="editExternalUrl" placeholder="粘贴外部图片/视频 URL" size="small" class="el-input-url" clearable />
+            <el-select v-model="editExternalType" size="small" style="width: 90px">
+              <el-option label="图片" value="image" />
+              <el-option label="视频" value="video" />
+            </el-select>
+            <el-button size="small" type="primary" @click="handleEditAddExternalLink">添加</el-button>
+            <el-button size="small" @click="showEditExternalInput = false; editExternalUrl = ''">取消</el-button>
           </div>
           <div v-if="editForm.media.length" class="media-grid">
             <div v-for="media in editForm.media" :key="media.id" class="media-item">
@@ -232,6 +321,7 @@
                 <el-icon><VideoCamera /></el-icon>
                 <span>视频</span>
               </div>
+              <el-tag v-if="!media.is_local" size="small" type="warning">外链</el-tag>
               <el-button link type="danger" @click="handleDeleteMedia(media)">移除</el-button>
             </div>
           </div>
@@ -278,6 +368,8 @@ import {
   deleteMomentMedia
 } from '@/api/moment'
 import type { MomentWithMedia, MomentMedia, CreateMomentPayload } from '@/model/moment'
+import ExtensionEditor from './moments-extension/editor/ExtensionEditor.vue'
+import ExtensionRenderer from './moments-extension/renderer/ExtensionRenderer.vue'
 import type { UploadFile } from 'element-plus'
 
 type UploadTarget = 'local' | 'oss'
@@ -290,6 +382,8 @@ const filters = reactive({
   status: ''
 })
 
+const showComposerExternalInput = ref(false)
+
 type ComposerMediaItem = {
   id: string
   file: UploadFile
@@ -297,11 +391,23 @@ type ComposerMediaItem = {
   media_type: 'image' | 'video'
 }
 
+interface ExternalLinkItem {
+  media_url: string
+  media_type: 'image' | 'video'
+}
+
 const composer = reactive({
   content: '',
   message_link: '',
   mediaItems: [] as ComposerMediaItem[],
-  uploadTarget: 'local' as UploadTarget
+  externalLinks: [] as ExternalLinkItem[],
+  externalUrl: '',
+  externalType: 'image' as 'image' | 'video',
+  uploadTarget: 'local' as UploadTarget,
+  tags: '',
+  pinnedOrder: 0,
+  isAd: false,
+  extension: null as string | null
 })
 
 const columnCount = ref(3)
@@ -328,6 +434,9 @@ const waterfallColumns = computed(() => {
 const editDialogVisible = ref(false)
 const editUploadTarget = ref<UploadTarget>('local')
 const editPendingMedia = ref<ComposerMediaItem[]>([])
+const showEditExternalInput = ref(false)
+const editExternalUrl = ref('')
+const editExternalType = ref<'image' | 'video'>('image')
 const editForm = reactive({
   id: 0,
   content: '',
@@ -336,7 +445,11 @@ const editForm = reactive({
   guild_id: '',
   channel_id: '',
   message_id: '',
-  media: [] as MomentMedia[]
+  media: [] as MomentMedia[],
+  tags: '',
+  pinnedOrder: 0,
+  isAd: false,
+  extension: null as string | null
 })
 
 const { currentPage, pageSize, total, handlePageChange, handleSizeChange, reset } = usePagination(
@@ -472,6 +585,47 @@ const removeComposerMedia = (index: number) => {
   composer.mediaItems.splice(index, 1)
 }
 
+const handleAddComposerExternalLink = () => {
+  const url = composer.externalUrl.trim()
+  if (!url) {
+    ElMessage.warning('请输入外部链接 URL')
+    return
+  }
+  composer.externalLinks.push({
+    media_url: url,
+    media_type: composer.externalType
+  })
+  composer.externalUrl = ''
+  showComposerExternalInput.value = false
+}
+
+const closeComposerExternalInput = () => {
+  showComposerExternalInput.value = false
+  composer.externalUrl = ''
+}
+
+const removeComposerExternalLink = (index: number) => {
+  composer.externalLinks.splice(index, 1)
+}
+
+const handleEditAddExternalLink = () => {
+  const url = editExternalUrl.value.trim()
+  if (!url) {
+    ElMessage.warning('请输入外部链接 URL')
+    return
+  }
+  editForm.media.push({
+    id: 0,
+    moment_id: editForm.id,
+    media_url: url,
+    media_type: editExternalType.value,
+    is_local: 0,
+    is_deleted: 0
+  })
+  editExternalUrl.value = ''
+  showEditExternalInput.value = false
+}
+
 const uploadComposerMedia = async (
   basePath: string
 ): Promise<Array<{ media_url: string; media_type: 'image' | 'video' }>> => {
@@ -497,7 +651,18 @@ const handleCreateMoment = async () => {
     const payload: CreateMomentPayload = {
       content: composer.content.trim(),
       message_link: composer.message_link.trim() || undefined,
-      media: uploadedMedia
+      tags: composer.tags || undefined,
+      pinned_order: composer.pinnedOrder || undefined,
+      is_ad: composer.isAd ? 1 : undefined,
+      extension: composer.extension || undefined,
+      media: [
+        ...uploadedMedia,
+        ...composer.externalLinks.map((link) => ({
+          media_url: link.media_url,
+          media_type: link.media_type,
+          is_local: 0
+        }))
+      ]
     }
     await createMoment(payload)
     ElMessage.success('发布成功')
@@ -509,6 +674,7 @@ const handleCreateMoment = async () => {
     composer.content = ''
     composer.message_link = ''
     composer.mediaItems = []
+    composer.externalLinks = []
     reset()
     fetchMoments()
   } catch (error) {
@@ -534,6 +700,10 @@ const openEditDialog = (moment: MomentWithMedia) => {
   editForm.guild_id = moment.guild_id ? String(moment.guild_id) : ''
   editForm.channel_id = moment.channel_id ? String(moment.channel_id) : ''
   editForm.message_id = moment.message_id ? String(moment.message_id) : ''
+  editForm.tags = moment.tags || ''
+  editForm.pinnedOrder = moment.pinned_order || 0
+  editForm.isAd = !!moment.is_ad
+  editForm.extension = moment.extension || null
   editForm.media = moment.media.map((item) => ({ ...item }))
   editDialogVisible.value = true
 }
@@ -546,6 +716,10 @@ const resetEditForm = () => {
   editForm.guild_id = ''
   editForm.channel_id = ''
   editForm.message_id = ''
+  editForm.tags = ''
+  editForm.pinnedOrder = 0
+  editForm.isAd = false
+  editForm.extension = null
   editForm.media = []
   editUploadTarget.value = 'local'
   editPendingMedia.value.forEach((item) => {
@@ -563,8 +737,13 @@ const handleUpdateMoment = async () => {
     await updateMoment(editForm.id, {
       content: editForm.content,
       status: editForm.status,
-      message_link: editForm.message_link || undefined
+      message_link: editForm.message_link || undefined,
+      tags: editForm.tags || undefined,
+      pinned_order: editForm.pinnedOrder || undefined,
+      is_ad: editForm.isAd ? 1 : undefined,
+      extension: editForm.extension || undefined
     })
+    // 添加新上传的媒体文件
     if (editPendingMedia.value.length) {
       uploading.value = true
       const pendingItems = [...editPendingMedia.value]
@@ -585,11 +764,30 @@ const handleUpdateMoment = async () => {
         removeEditPendingMedia(item.id)
       }
     }
+    // 保存新增的外链媒体（id === 0 表示新添加的外链）
+    const newExternalLinks = editForm.media.filter((m) => m.id === 0 && !m.is_local)
+    for (const link of newExternalLinks) {
+      const res = await createMomentMedia({
+        moment_id: editForm.id,
+        media_url: link.media_url,
+        media_type: link.media_type as 'image' | 'video',
+        is_local: 0
+      })
+      link.id = res.data.id
+      const target = moments.value.find((entry) => entry.id === editForm.id)
+      if (target) {
+        target.media.push(res.data)
+      }
+    }
     const target = moments.value.find((item) => item.id === editForm.id)
     if (target) {
       target.content = editForm.content
       target.status = editForm.status
       target.message_link = editForm.message_link || ''
+      target.tags = editForm.tags
+      target.pinned_order = editForm.pinnedOrder
+      target.is_ad = editForm.isAd ? 1 : 0
+      target.extension = editForm.extension || ''
       target.media = editForm.media.map((item) => ({ ...item }))
     }
     ElMessage.success('更新成功')
@@ -698,7 +896,7 @@ onUnmounted(() => {
 }
 
 .upload-hint {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 
@@ -731,7 +929,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   gap: 6px;
 }
 
@@ -764,9 +962,9 @@ onUnmounted(() => {
 }
 
 .moment-card {
-  background: #fff;
+  background: var(--el-bg-color);
   border-radius: 12px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--el-border-color-light);
   overflow: hidden;
   transition: all 0.3s ease;
   display: flex;
@@ -812,11 +1010,11 @@ onUnmounted(() => {
 .media-video-placeholder {
   width: 100%;
   height: 100%;
-  background: #f5f7fa;
+  background: var(--el-fill-color-lighter);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .more-media-mask {
@@ -843,7 +1041,7 @@ onUnmounted(() => {
 
 .moment-content {
   white-space: pre-wrap;
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-size: 14px;
   line-height: 1.5;
   word-break: break-word;
@@ -863,7 +1061,7 @@ onUnmounted(() => {
 }
 
 .moment-time {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 
@@ -882,22 +1080,22 @@ onUnmounted(() => {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #f0f2f5;
+  background: var(--el-fill-color-light);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   transition: all 0.2s;
 }
 
 .source-icon.tg { color: #2481cc; background: rgba(36, 129, 204, 0.1); }
 .source-icon.dc { color: #5865f2; background: rgba(88, 101, 242, 0.1); }
-.source-icon.link { color: #606266; }
+.source-icon.link { color: var(--el-text-color-regular); }
 
 .moment-actions-bar {
   display: flex;
   justify-content: flex-end;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--el-fill-color-light);
   padding-top: 8px;
   margin-top: 4px;
 }
@@ -915,7 +1113,7 @@ onUnmounted(() => {
 
 .empty-state {
   text-align: center;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   padding: 40px 0;
 }
 
@@ -930,5 +1128,94 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.external-link-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+}
+
+.external-link-input .el-input-url {
+  flex: 1;
+}
+
+.composer-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-tags-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.meta-pinned-input {
+  width: 130px;
+}
+
+.moment-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .composer-toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .composer-toolbar .el-button {
+    flex: 1;
+    min-width: 0;
+  }
+  .composer-meta-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .composer-meta-bar > * {
+    width: 100%;
+  }
+  .external-link-input {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .external-link-input > * {
+    flex: 1 1 100%;
+  }
+  .external-link-input .el-input-url {
+    width: 100% !important;
+  }
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card-header .header-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .card-header .header-actions > * {
+    flex: 1;
+  }
+  .waterfall-container {
+    column-count: 1 !important;
+  }
+  .moment-media-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }
 </style>

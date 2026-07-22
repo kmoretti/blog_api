@@ -34,6 +34,7 @@
         </div>
       </template>
 
+      <div class="table-responsive">
       <el-table
         :data="sortedEntries"
         v-loading="loading"
@@ -115,6 +116,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
     </el-card>
 
     <el-dialog v-model="uploadDialogVisible" title="上传文件" width="520px" @close="resetUploadForm">
@@ -494,11 +496,11 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 .name-icon {
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 .upload-icon {
   font-size: 28px;
-  color: #8c939d;
+  color: var(--el-text-color-secondary);
 }
 .code-editor {
   min-height: 520px;
@@ -513,5 +515,26 @@ onBeforeUnmount(() => {
 }
 .code-editor :deep(.cm-scroller) {
   overflow: auto;
+}
+
+@media (max-width: 767px) {
+  .resource-management .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .resource-management .header-left {
+    width: 100%;
+  }
+  .resource-management .header-actions {
+    width: 100%;
+    display: flex;
+    gap: 4px;
+  }
+  .resource-management .header-actions .el-button {
+    flex: 1;
+    font-size: 12px;
+    padding: 8px 4px;
+  }
 }
 </style>

@@ -1,2 +1,4 @@
 onlyBuiltDependencies:
   - vue-demi
+
+storeDir: node_modules/.pnpm-store

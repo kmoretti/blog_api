@@ -22,14 +22,17 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 	dtoLinks := make([]model.FriendLinkDTO, 0, len(links))
 	for _, link := range links {
 		dto := model.FriendLinkDTO{
-			ID:          link.ID,
-			Name:        link.Name,
-			Link:        link.Link,
-			Avatar:      link.Avatar,
-			Description: link.Info,
-			Status:      link.Status,
-			EnableRss:   link.EnableRss,
-			UpdatedAt:   link.UpdatedAt,
+			ID:             link.ID,
+			Name:           link.Name,
+			Link:           link.Link,
+			Avatar:         link.Avatar,
+			Description:    link.Info,
+			Status:         link.Status,
+			EnableRss:      link.EnableRss,
+			UpdatedAt:      link.UpdatedAt,
+			Snapshot:       link.Snapshot,
+			FriendLinkPage: link.FriendLinkPage,
+			Feed:           link.Feed,
 		}
 		if isPrivate {
 			dto.Email = link.Email
@@ -43,14 +46,17 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 
 func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkDTO {
 	dto := model.FriendLinkDTO{
-		ID:          link.ID,
-		Name:        link.Name,
-		Link:        link.Link,
-		Avatar:      link.Avatar,
-		Description: link.Info,
-		Status:      link.Status,
-		EnableRss:   link.EnableRss,
-		UpdatedAt:   link.UpdatedAt,
+		ID:             link.ID,
+		Name:           link.Name,
+		Link:           link.Link,
+		Avatar:         link.Avatar,
+		Description:    link.Info,
+		Status:         link.Status,
+		EnableRss:      link.EnableRss,
+		UpdatedAt:      link.UpdatedAt,
+		Snapshot:       link.Snapshot,
+		FriendLinkPage: link.FriendLinkPage,
+		Feed:           link.Feed,
 	}
 	if isPrivate {
 		dto.Email = link.Email

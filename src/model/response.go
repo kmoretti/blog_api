@@ -29,7 +29,10 @@ type FriendLinkDTO struct {
 	Times       int    `json:"times,omitempty"`
 	EnableRss   bool   `json:"enable_rss"`
 	IsDied      bool   `json:"is_died,omitempty"`
-	UpdatedAt   int64  `json:"updated_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	Snapshot        string `json:"snapshot,omitempty"`
+	FriendLinkPage  string `json:"friend_link_page,omitempty"`
+	Feed            string `json:"feed,omitempty"`
 }
 
 // NewSuccessResponse 创建成功响应
@@ -54,6 +57,10 @@ type PublicMomentWithMedia struct {
 	ID               int            `json:"id"`
 	Content          string         `json:"content"`
 	Status           string         `json:"status"`
+	Tags             string         `json:"tags"`
+	PinnedOrder      int            `json:"pinned_order"`
+	IsAd             int            `json:"is_ad"`
+	Extension        string         `json:"extension,omitempty"`
 	MessageLink      string         `json:"message_link,omitempty"`
 	CreatedAt        int64          `json:"created_at"`
 	UpdatedAt        int64          `json:"updated_at"`

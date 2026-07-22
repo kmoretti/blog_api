@@ -105,7 +105,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.Offset > 0 {
 		query = query.Offset(opts.Offset)
 	}
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
 		return resp, fmt.Errorf("could not query friend links: %w", err)
 	}
@@ -116,7 +116,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 // GetFriendLinkByID fetches a single friend link by ID.
 func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("id = ?", id).First(&link).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -130,7 +130,7 @@ func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 // GetFriendLinkByEmail fetches a single friend link by email.
 func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("email = ?", email).First(&link).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -246,6 +246,9 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		"status":           true,
 		"enable_rss":       true,
 		"is_died":          true,
+		"snapshot":         true,
+		"friend_link_page": true,
+		"feed":             true,
 	}
 
 	updates := map[string]interface{}{}

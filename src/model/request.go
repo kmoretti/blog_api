@@ -62,12 +62,17 @@ type UpdateConfigReq struct {
 type MediaRequest struct {
 	MediaURL  string `json:"media_url" binding:"required"`
 	MediaType string `json:"media_type" binding:"required"`
+	IsLocal   *int   `json:"is_local,omitempty"`
 }
 
 // CreateMomentRequest represents the request body for creating a new moment.
 type CreateMomentRequest struct {
 	Content     string         `json:"content" binding:"required"`
 	Media       []MediaRequest `json:"media"`
+	Tags        *string        `json:"tags,omitempty"`
+	PinnedOrder *int           `json:"pinned_order,omitempty"`
+	IsAd        *int           `json:"is_ad,omitempty"`
+	Extension   *string        `json:"extension,omitempty"`
 	GuildID     *int64         `json:"guild_id"`
 	ChannelID   *int64         `json:"channel_id"`
 	MessageID   *int64         `json:"message_id"`
@@ -96,6 +101,10 @@ type UpdateMomentMediaReq struct {
 type UpdateMomentRequest struct {
 	Content     *string `json:"content"`
 	Status      *string `json:"status"`
+	Tags        *string `json:"tags,omitempty"`
+	PinnedOrder *int    `json:"pinned_order,omitempty"`
+	IsAd        *int    `json:"is_ad,omitempty"`
+	Extension   *string `json:"extension,omitempty"`
 	GuildID     *int64  `json:"guild_id"`
 	ChannelID   *int64  `json:"channel_id"`
 	MessageID   *int64  `json:"message_id"`

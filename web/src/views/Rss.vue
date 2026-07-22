@@ -424,7 +424,7 @@ onMounted(() => {
 
 .post-link {
   text-decoration: none;
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .post-link:hover {
@@ -435,5 +435,24 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .rss-container {
+    flex-direction: column !important;
+  }
+  .rss-container .feed-aside,
+  .rss-container .posts-main {
+    width: 100% !important;
+  }
+  .rss-container .feed-aside {
+    border-right: none !important;
+    border-bottom: 1px solid #e4e7ed;
+    padding-right: 0;
+    padding-bottom: 10px;
+  }
+  .rss-container .posts-main {
+    border-left: none !important;
+  }
 }
 </style>

@@ -38,7 +38,9 @@ export const updateFriendLink = (id: number, payload: UpdateFriendLinkPayload): 
   const fieldMap: Record<string, string> = {
     name: 'website_name',
     link: 'website_url',
-    avatar: 'website_icon_url'
+    avatar: 'website_icon_url',
+    friend_link_page: 'friend_link_page',
+    feed: 'feed'
   }
   const mappedData: Record<string, unknown> = {}
   Object.entries(payload.data).forEach(([key, value]) => {

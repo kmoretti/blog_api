@@ -134,6 +134,11 @@ type EmailConf struct {
 	Sender   string `mapstructure:"sender"`
 }
 
+// PwaConfig PWA 配置
+type PwaConfig struct {
+	Enable bool `mapstructure:"enable"`
+}
+
 // DiscordConfig Discord 配置
 type DiscordConfig struct {
 	Enable       bool     `mapstructure:"enable"`

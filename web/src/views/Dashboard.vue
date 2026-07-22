@@ -5,26 +5,26 @@
       <p>当前登录用户: <strong>{{ username }} </strong>，欢迎您</p>
       <el-divider />
       <div class="stats-section">
-        <el-row :gutter="20">
-          <el-col :span="8">
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="24" :md="8" :lg="8">
             <el-statistic title="友链总数" :value="stats.status_data.friend_link_count" />
           </el-col>
-          <el-col :span="8">
+          <el-col :xs="24" :sm="24" :md="8" :lg="8">
             <el-statistic title="RSS文章总数" :value="stats.status_data.rss_post_count" />
           </el-col>
-          <el-col :span="8">
-            <el-statistic title="在线时长" :value="stats.uptime" />
+          <el-col :xs="24" :sm="24" :md="8" :lg="8">
+            <el-statistic title="在线时长" :value="uptimeSeconds" />
           </el-col>
         </el-row>
       </div>
     </el-card>
     <el-card class="chart-card">
-      <el-row :gutter="20">
-        <el-col :span="12">
-          <div ref="pieChart" style="width: 100%; height: 400px"></div>
+      <el-row :gutter="16">
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <div ref="pieChart" style="width: 100%; height: 400px" class="chart-container"></div>
         </el-col>
-        <el-col :span="12">
-          <div ref="lineChart" style="width: 100%; height: 400px"></div>
+        <el-col :xs="24" :sm="24" :md="12" :lg="12">
+          <div ref="lineChart" style="width: 100%; height: 400px" class="chart-container"></div>
         </el-col>
       </el-row>
     </el-card>
@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { statsApi } from '@/api/stats'
 import type { SystemStatus } from '@/model/stats'
@@ -54,35 +54,90 @@ const stats = ref<SystemStatus>({
   time: 0
 })
 
+const uptimeSeconds = ref(0)
+
+function parseUptime(uptime: string): number {
+  const match = uptime.match(/(\d+)h/)
+  if (match) return parseInt(match[1]) * 3600
+  const matchMin = uptime.match(/(\d+)m/)
+  if (matchMin) return parseInt(matchMin[1]) * 60
+  const matchSec = uptime.match(/(\d+)s/)
+  if (matchSec) return parseInt(matchSec[1])
+  return 0
+}
+
 onMounted(async () => {
   username.value = localStorage.getItem('username') || '管理员'
   try {
     const res = await statsApi.getSystemStatus()
     if (res.code === 200) {
       stats.value = res.data
+      uptimeSeconds.value = parseUptime(res.data.uptime)
       initCharts()
     } else {
       ElMessage.error(res.message || '获取状态信息失败')
     }
   } catch (error) {
-    ElMessage.error('请求状态信息时出错')
+    // axios 拦截器已处理错误提示，这里不再重复弹窗
   }
 })
 
+let chartInstances: echarts.ECharts[] = []
+let themeObserver: MutationObserver | null = null
+
+onMounted(() => {
+  themeObserver = new MutationObserver(() => {
+    // Re-render charts when theme class changes
+    chartInstances.forEach((chart) => {
+      const textColor = getChartTextColor()
+      chart.setOption({
+        backgroundColor: 'transparent',
+        title: { textStyle: { color: textColor } },
+        legend: { textStyle: { color: textColor } }
+      })
+      chart.setOption({
+        xAxis: { axisLabel: { color: textColor }, axisLine: { lineStyle: { color: textColor } } },
+        yAxis: { axisLabel: { color: textColor }, axisLine: { lineStyle: { color: textColor } } }
+      })
+    })
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class']
+  })
+})
+
+onBeforeUnmount(() => {
+  if (themeObserver) {
+    themeObserver.disconnect()
+    themeObserver = null
+  }
+  chartInstances.forEach((chart) => chart.dispose())
+  chartInstances = []
+})
+
+function getChartTextColor(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#2c3531'
+}
+
 const initCharts = () => {
+  const textColor = getChartTextColor()
   if (pieChart.value) {
     const pie = echarts.init(pieChart.value)
     pie.setOption({
+      backgroundColor: 'transparent',
       title: {
         text: '友链存活状态',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
       tooltip: {
         trigger: 'item'
       },
       legend: {
         orient: 'vertical',
-        left: 'left'
+        left: 'left',
+        textStyle: { color: textColor }
       },
       series: [
         {
@@ -107,20 +162,28 @@ const initCharts = () => {
 
   if (lineChart.value) {
     const line = echarts.init(lineChart.value)
+    chartInstances.push(line)
     line.setOption({
+      backgroundColor: 'transparent',
       title: {
         text: '每月 Feed Post 数量',
-        left: 'center'
+        left: 'center',
+        textStyle: { color: textColor }
       },
       tooltip: {
         trigger: 'axis'
       },
       xAxis: {
         type: 'category',
-        data: stats.value.status_data.rss_post_count_monthly.map((item) => item.month)
+        data: stats.value.status_data.rss_post_count_monthly.map((item) => item.month),
+        axisLabel: { color: textColor },
+        axisLine: { lineStyle: { color: textColor } }
       },
       yAxis: {
-        type: 'value'
+        type: 'value',
+        axisLabel: { color: textColor },
+        axisLine: { lineStyle: { color: textColor } },
+        splitLine: { lineStyle: { color: 'rgba(128,128,128,0.15)' } }
       },
       series: [
         {
@@ -145,24 +208,34 @@ const initCharts = () => {
 }
 .welcome-card h3 {
   margin: 0 0 16px 0;
-  color: #303133;
+  color: var(--el-text-color-primary);
   font-size: 24px;
 }
 .welcome-card p {
-  color: #606266;
+  color: var(--el-text-color-regular);
   margin: 0 0 16px 0;
 }
 .info-section h4 {
-  color: #303133;
+  color: var(--el-text-color-primary);
   margin: 0 0 12px 0;
 }
 .info-section ul {
   margin: 0;
   padding-left: 20px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   line-height: 1.8;
 }
 .stats-section {
   margin-top: 16px;
+}
+@media (max-width: 767px) {
+  .chart-container {
+    height: 250px !important;
+  }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+  .chart-container {
+    height: 300px !important;
+  }
 }
 </style>

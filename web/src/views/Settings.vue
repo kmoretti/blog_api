@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="settings-container">
     <el-card class="settings-card">
       <template #header>
@@ -193,7 +193,7 @@
                 :min="1"
                 :max="20"
               />
-              <div style="color: #909399; font-size: 12px; margin-top: 8px">
+              <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 8px">
                 设置 RSS 爬虫的并发数量，建议值为 5-10
               </div>
             </el-form-item>
@@ -203,7 +203,7 @@
                 :min="1"
                 :max="120"
               />
-              <div style="color: #909399; font-size: 12px; margin-top: 8px">
+              <div style="color: var(--el-text-color-secondary); font-size: 12px; margin-top: 8px">
                 设置 RSS 解析请求的超时时间，建议值为 10-30
               </div>
             </el-form-item>
@@ -406,6 +406,28 @@
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="PWA 配置" name="pwa">
+          <el-form :model="config.system_conf.pwa_conf" label-width="150px">
+            <el-form-item label="启用 PWA">
+              <el-switch v-model="config.system_conf.pwa_conf.enable" />
+              <div class="form-item-help">
+                启用后，下次刷新页面时将自动注册 Service Worker，实现离线访问和应用安装功能。
+              </div>
+            </el-form-item>
+            <el-form-item label="安装应用" v-if="pwaEnabled && canInstall">
+              <el-button type="success" :icon="Download" @click="handleInstallPwa">
+                安装到桌面
+              </el-button>
+              <div class="form-item-help">点击后浏览器将弹出安装确认窗口。</div>
+            </el-form-item>
+            <el-alert type="info" :closable="false" show-icon>
+              <template #title>
+                PWA 安装后可在手机桌面或电脑任务栏创建快捷方式，打开体验接近原生应用。启用后需刷新页面生效。
+              </template>
+            </el-alert>
+          </el-form>
+        </el-tab-pane>
+
         <el-tab-pane label="危险区域" name="danger">
           <div class="danger-zone">
             <div class="danger-zone__content">
@@ -427,8 +449,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import { getSystemConfig, restartSystem, updateSystemConfig } from '@/api/config'
 import type { SystemConfig } from '@/model/config'
+import { usePwa } from '@/composables/usePwa'
+
+const { pwaEnabled, canInstall, install: installPwa } = usePwa()
 
 const activeTab = ref('safe')
 const saving = ref(false)
@@ -516,6 +542,9 @@ const config = ref<SystemConfig>({
       password: '',
       port: 465,
       sender: ''
+    },
+    pwa_conf: {
+      enable: false
     }
   }
 })
@@ -551,6 +580,11 @@ onMounted(async () => {
         password: '',
         port: 465,
         sender: ''
+      }
+    }
+    if (!res.system_conf.pwa_conf) {
+      res.system_conf.pwa_conf = {
+        enable: false
       }
     }
     config.value = res
@@ -694,6 +728,11 @@ const saveConfig = async () => {
         key: 'system_conf.email_conf',
         currentValue: config.value.system_conf.email_conf,
         originalValue: originalConfig.value.system_conf.email_conf
+      },
+      {
+        key: 'system_conf.pwa_conf',
+        currentValue: config.value.system_conf.pwa_conf,
+        originalValue: originalConfig.value.system_conf.pwa_conf
       }
     ]
 
@@ -714,11 +753,27 @@ const saveConfig = async () => {
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
 
     ElMessage.success(`成功保存 ${updates.length} 项配置`)
+    // Sync PWA toggle state to localStorage for usePwa to read
+    localStorage.setItem('pwa_enabled', String(config.value.system_conf.pwa_conf.enable))
+
+    // Guide user to refresh for PWA activation
+    if (config.value.system_conf.pwa_conf.enable) {
+      ElMessage.success('PWA 已启用，刷新页面后即可安装应用')
+    }
   } catch (error) {
     ElMessage.error('保存配置失败')
     console.error(error)
   } finally {
     saving.value = false
+  }
+}
+
+const handleInstallPwa = async () => {
+  const ok = await installPwa()
+  if (ok) {
+    ElMessage.success('应用已安装')
+  } else {
+    ElMessage.info('安装已取消')
   }
 }
 
@@ -775,27 +830,27 @@ const handleRestart = async () => {
 
 :deep(.el-divider__text) {
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .form-item-help {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 12px;
   margin-top: 4px;
   line-height: 1.2;
 }
 
 .env-override-notice {
-  color: #e6a23c; /* warning color */
+  color: var(--el-color-warning);
   font-size: 12px;
   margin-top: 4px;
   line-height: 1.2;
 }
 .env-override-notice code {
-  background-color: #f4f4f5;
+  background-color: var(--el-fill-color);
   padding: 2px 4px;
   border-radius: 4px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 /* 设置 Tab 内容区域可滚动 */
@@ -812,9 +867,9 @@ const handleRestart = async () => {
   gap: 16px;
   padding: 20px;
   margin-top: 8px;
-  border: 1px solid #f56c6c;
+  border: 1px solid var(--el-color-danger);
   border-radius: 8px;
-  background: #fef0f0;
+  background: var(--el-color-danger-light-9);
 }
 
 .danger-zone__content {
@@ -822,15 +877,26 @@ const handleRestart = async () => {
 }
 
 .danger-zone__title {
-  color: #c45656;
+  color: var(--el-color-danger);
   font-size: 16px;
   font-weight: 600;
 }
 
 .danger-zone__desc {
   margin-top: 6px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   font-size: 13px;
   line-height: 1.5;
+}
+
+@media (max-width: 767px) {
+  .settings-container .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .settings-container .card-header .el-button {
+    width: 100%;
+  }
 }
 </style>

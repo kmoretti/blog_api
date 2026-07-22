@@ -15,6 +15,18 @@ func CreateMoment(db *gorm.DB, req model.CreateMomentRequest) error {
 		Status:    "visible",
 		CreatedAt: time.Now().Unix(),
 	}
+	if req.Tags != nil {
+		moment.Tags = *req.Tags
+	}
+	if req.PinnedOrder != nil {
+		moment.PinnedOrder = *req.PinnedOrder
+	}
+	if req.IsAd != nil {
+		moment.IsAd = *req.IsAd
+	}
+	if req.Extension != nil {
+		moment.Extension = *req.Extension
+	}
 	if req.GuildID != nil {
 		moment.GuildID = *req.GuildID
 	}
@@ -30,9 +42,14 @@ func CreateMoment(db *gorm.DB, req model.CreateMomentRequest) error {
 
 	var media []model.MomentMedia
 	for _, m := range req.Media {
+		isLocal := 0
+		if m.IsLocal != nil {
+			isLocal = *m.IsLocal
+		}
 		media = append(media, model.MomentMedia{
 			MediaURL:  m.MediaURL,
 			MediaType: m.MediaType,
+			IsLocal:   isLocal,
 			IsDeleted: 0,
 		})
 	}
