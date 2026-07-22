@@ -277,9 +277,25 @@ docker compose start blog-api
 
 ### 10. 常见问题排查
 
-#### 容器无法启动
+#### GitHub Actions 推送 GHCR 时出现 `permission_denied: write_package`
 
-先查看完整启动日志：
+如果 GitHub Actions 在构建完成后出现以下错误：
+
+```text
+denied: permission_denied: write_package
+```
+
+说明 Docker 构建本身已经完成，但用于登录 GHCR 的 `GITHUB_TOKEN` 没有目标镜像包的写权限。按以下顺序检查：
+
+1. 仓库的 **Settings → Actions → General → Workflow permissions** 允许工作流使用读写权限。若组织策略禁止工作流写入，需要由组织管理员调整策略。
+2. 工作流的发布任务必须包含 `packages: write` 权限。当前 `.github/workflows/docker-publish.yml` 同时在工作流和 `publish` job 中声明了该权限。
+3. 如果 `ghcr.io/kmoretti/blog_api` 已经存在，打开该 GHCR Package 的 **Package settings → Manage Actions access**，将 `kmoretti/blog_api` 仓库加入可访问仓库，并确认包没有被绑定到其他仓库而拒绝当前仓库访问。
+4. 确认工作流运行的仓库确实是 `kmoretti/blog_api`，且推送触发分支为 `main`。
+5. 如果仓库或组织启用了更严格的 Actions、Packages 或私有仓库策略，需要使用具有 `write:packages` 权限的个人访问令牌登录，或先解除该策略限制。不要把个人访问令牌硬编码到工作流文件中，应使用 GitHub Actions Secret。
+
+工作流权限修正后，需要重新推送一次 `main` 分支或在 Actions 页面重新运行失败的工作流。该错误与 `libc6`、前端构建警告和 Go 编译无关。
+
+
 
 ```bash
 docker compose logs --tail=200 blog-api
