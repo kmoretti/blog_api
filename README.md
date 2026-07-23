@@ -39,11 +39,14 @@ go run main.go
 
 这是推荐的生产部署方式。项目会从 GHCR 拉取已经构建好的单容器镜像，镜像内同时包含 Go API 服务和 Vue 管理面板，不需要在服务器上安装 Go、Node.js 或 pnpm。
 
-当前镜像面向 `x86_64 / linux/amd64` 架构：
+当前镜像面向 `x86_64 / linux/amd64` 架构。GitHub Actions 每次构建 `main` 时会同时发布两个标签：
 
 ```text
 ghcr.io/kmoretti/blog_api:latest
+ghcr.io/kmoretti/blog_api:sha-a1b2c3d
 ```
+
+其中 `latest` 始终指向最近一次构建，`sha-a1b2c3d` 固定对应某次 Git 提交。
 
 以下命令默认在服务器上的项目目录执行。建议将 `README.md`、`docker-compose.yml`、`.env`、`data/` 等文件放在同一个目录中。
 
@@ -230,7 +233,9 @@ docker compose down
 
 ### 7. 更新镜像
 
-`latest` 是可变标签，发布新版本后再次拉取可能得到不同内容。更新前建议先备份数据库，然后执行：
+#### 一键更新到最新版本
+
+Compose 默认使用 `latest`，因此不设置 `IMAGE_TAG` 时，现有一键部署流程保持不变：
 
 ```bash
 docker compose stop blog-api
@@ -239,13 +244,64 @@ docker compose up -d blog-api
 docker compose ps blog-api
 ```
 
-确认服务恢复为 `healthy` 后再继续提供流量。更新过程中会有短暂中断；当前 Compose 配置没有配置蓝绿发布或无中断升级。
-
-如果需要确认实际使用的镜像摘要，可以执行：
+也可以简化为：
 
 ```bash
+docker compose pull blog-api
+docker compose up -d blog-api
+```
+
+#### 固定部署某个提交版本
+
+每次 `main` 构建都会发布类似下面的 SHA 标签：
+
+```text
+sha-a1b2c3d
+```
+
+指定 SHA 标签时，将 `IMAGE_TAG` 传给当前命令：
+
+```bash
+IMAGE_TAG=sha-a1b2c3d docker compose pull blog-api
+IMAGE_TAG=sha-a1b2c3d docker compose up -d blog-api
+```
+
+这种写法只对当前命令生效，不会修改服务器上的 Compose 文件，也不会影响之后默认使用 `latest`。
+
+如果希望服务器固定运行某个版本，可以在部署目录的 `.env` 中增加：
+
+```dotenv
+IMAGE_TAG=sha-a1b2c3d
+```
+
+之后普通命令会固定使用该版本：
+
+```bash
+docker compose pull blog-api
+docker compose up -d blog-api
+```
+
+删除 `.env` 中的 `IMAGE_TAG` 后，会恢复默认的 `latest`。
+
+#### 回滚到旧版本
+
+回滚时将 `IMAGE_TAG` 设置为之前验证过的 SHA 标签：
+
+```bash
+IMAGE_TAG=sha-7f8e9ab docker compose pull blog-api
+IMAGE_TAG=sha-7f8e9ab docker compose up -d blog-api
+```
+
+更新前建议先备份数据库。确认服务恢复为 `healthy` 后再继续提供流量。更新过程中会有短暂中断；当前 Compose 配置没有配置蓝绿发布或无中断升级。
+
+查看当前容器实际使用的镜像标签和摘要：
+
+```bash
+docker inspect --format='{{.Config.Image}}' $(docker compose ps -q blog-api)
 docker inspect --format='{{index .RepoDigests 0}}' $(docker compose ps -q blog-api)
 ```
+
+查看 GHCR 中可用的镜像版本，可以访问仓库的 **Packages → Container images → blog_api → Versions**。
 
 ### 8. 更新前备份 SQLite
 

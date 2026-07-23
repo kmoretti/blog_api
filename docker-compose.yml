@@ -1,6 +1,6 @@
 services:
   blog-api:
-    image: ghcr.io/kmoretti/blog_api:latest
+    image: ghcr.io/kmoretti/blog_api:${IMAGE_TAG:-latest}
     platform: linux/amd64
     ports:
       - "10024:10024"

@@ -38,6 +38,9 @@ func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engin
 	if os.Getenv("PPROF_ENABLED") == "true" {
 		pprof.Register(router)
 	}
+	router.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/panel/")
+	})
 	router.NoRoute(staticFileHandler(cfg))
 	return router
 }
