@@ -24,6 +24,7 @@ func (FriendWebsite) TableName() string {
 type FriendLinkQueryOptions struct {
 	Status   string   // Single status filter, e.g., "pending"
 	Statuses []string // Multiple statuses for IN or NOT IN clauses, e.g., {"ignored"}
+	Email    string   // Filter by owner email
 	IsDied   *bool    // Filter by is_died status
 	NotIn    bool     // If true, use NOT IN for Statuses
 	Search   string   // Search keyword

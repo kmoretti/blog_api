@@ -63,6 +63,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			publicGroup.GET("/friend/:id", friendLinkHandler.GetFriendLinkByID)
 			publicGroup.POST("/friend", middleware.FriendLinkAuth(), updataHandler.CreateFriendLink)
 			publicGroup.PUT("/friend/:id", middleware.FriendLinkAuth(), updataHandler.EditFriendLink)
+			publicGroup.DELETE("/friend/:id", middleware.FriendLinkAuth(), updataHandler.DeleteOwnedFriendLink)
 			publicGroup.GET("/rss/", rssPostHandler.GetRssPosts)
 			publicGroup.GET("/image/*id", imagePublicHandler.GetImage)
 			publicGroup.GET("/moments/", momentHandler.GetMoments)

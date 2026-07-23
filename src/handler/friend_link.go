@@ -61,7 +61,7 @@ func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkD
 }
 
 // getFriendLinks is a helper function to get friend links with common logic.
-func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool) {
+func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool, email string) {
 	// Parse query parameters
 	status := c.Query("status")
 	search := c.Query("search")
@@ -114,6 +114,7 @@ func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool) {
 	opts := model.FriendLinkQueryOptions{
 		Status: status,
 		Search: search,
+		Email:  email,
 		Offset: offset,
 		Limit:  pageSize,
 		IsDied: isDied,
@@ -161,7 +162,7 @@ func (h *FriendLinkHandler) getFriendLinkByID(c *gin.Context, isPrivate bool) {
 
 // GetAllFriendLinks handles GET /api/friend/ request
 func (h *FriendLinkHandler) GetAllFriendLinks(c *gin.Context) {
-	h.getFriendLinks(c, false)
+	h.getFriendLinks(c, false, "")
 }
 
 // GetFriendLinkByID handles GET /api/public/friend/:id request
@@ -184,24 +185,13 @@ func (h *FriendLinkHandler) GetFriendLinkByEmailToken(c *gin.Context) {
 		return
 	}
 
-	link, err := friendsRepositories.GetFriendLinkByEmail(h.DB, email)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link not found"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve friend link"))
-		return
-	}
-
-	dto := toFriendLinkDTO(link, false)
-	c.JSON(http.StatusOK, model.NewSuccessResponse(dto))
+	h.getFriendLinks(c, false, email)
 }
 
 // GetFullFriendLinks handles GET /api/action/friend/ request (authenticated)
 // It returns the full friend link data, including sensitive fields.
 func (h *FriendLinkHandler) GetFullFriendLinks(c *gin.Context) {
-	h.getFriendLinks(c, true)
+	h.getFriendLinks(c, true, "")
 }
 
 // GetFullFriendLinkByID handles GET /api/action/friend/:id request (authenticated)
