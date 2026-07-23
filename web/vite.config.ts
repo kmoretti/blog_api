@@ -22,6 +22,26 @@ export default defineConfig({
   },
   build: {
     outDir: '../data/panel',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'element-plus',
+              test: /node_modules\/(?:\.pnpm\/)?(?:element-plus|@element-plus)/
+            },
+            {
+              name: 'echarts',
+              test: /node_modules\/(?:\.pnpm\/)?(?:echarts|zrender)/
+            },
+            {
+              name: 'editor',
+              test: /node_modules\/(?:\.pnpm\/)?(?:@codemirror|codemirror|@lezer)/
+            }
+          ]
+        }
+      }
+    }
   }
 })

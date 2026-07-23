@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -14,16 +15,16 @@
     "codemirror": "^6.0.2",
     "dayjs": "^1.11.21",
     "echarts": "^6.1.0",
-    "element-plus": "^2.14.2",
-    "pinia": "^3.0.4",
-    "vue": "^3.5.39",
-    "vue-router": "^5.1.0"
+    "element-plus": "^2.14.3",
+    "pinia": "^4.0.2",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
-    "@types/node": "^26.0.1",
-    "@vitejs/plugin-vue": "^6.0.7",
-    "typescript": "6.0.3",
-    "vite": "^8.1.0",
-    "vue-tsc": "3.3.5"
+    "@types/node": "^26.1.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "typescript": "7.0.2",
+    "vite": "^8.1.5",
+    "vue-tsc": "3.3.7"
   }
 }
