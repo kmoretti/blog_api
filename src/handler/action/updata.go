@@ -188,6 +188,13 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 		return
 	}
 
+	if value, exists := req.Data["skip_health_check"]; exists {
+		if _, ok := value.(bool); !ok {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "skip_health_check must be a boolean"))
+			return
+		}
+	}
+
 	rowsAffected, err := friendsRepositories.UpdateFriendLinkByID(h.DB, uint(id), req)
 	if err != nil {
 		log.Printf("[handler][updata][ERR] 更新友情链接失败: %v", err)

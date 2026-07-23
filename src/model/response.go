@@ -19,17 +19,18 @@ type PaginatedResponse struct {
 
 // FriendLinkDTO 友链数据传输对象（不包含敏感字段times）
 type FriendLinkDTO struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
-	Link        string `json:"link"`
-	Avatar      string `json:"avatar"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
-	Email       string `json:"email,omitempty"`
-	Times       int    `json:"times,omitempty"`
-	EnableRss   bool   `json:"enable_rss"`
-	IsDied      bool   `json:"is_died,omitempty"`
-	UpdatedAt   int64  `json:"updated_at"`
+	ID              int    `json:"id"`
+	Name            string `json:"name"`
+	Link            string `json:"link"`
+	Avatar          string `json:"avatar"`
+	Description     string `json:"description"`
+	Status          string `json:"status"`
+	Email           string `json:"email,omitempty"`
+	Times           int    `json:"times,omitempty"`
+	EnableRss       bool   `json:"enable_rss"`
+	IsDied          bool   `json:"is_died,omitempty"`
+	SkipHealthCheck *bool  `json:"skip_health_check,omitempty"`
+	UpdatedAt       int64  `json:"updated_at"`
 }
 
 // NewSuccessResponse 创建成功响应

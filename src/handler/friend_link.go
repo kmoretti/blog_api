@@ -35,6 +35,8 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 			dto.Email = link.Email
 			dto.Times = link.Times
 			dto.IsDied = link.IsDied
+			skipHealthCheck := link.SkipHealthCheck
+			dto.SkipHealthCheck = &skipHealthCheck
 		}
 		dtoLinks = append(dtoLinks, dto)
 	}
@@ -56,6 +58,8 @@ func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkD
 		dto.Email = link.Email
 		dto.Times = link.Times
 		dto.IsDied = link.IsDied
+		skipHealthCheck := link.SkipHealthCheck
+		dto.SkipHealthCheck = &skipHealthCheck
 	}
 	return dto
 }

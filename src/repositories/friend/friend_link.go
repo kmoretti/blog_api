@@ -78,6 +78,9 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.IsDied != nil {
 		baseQuery = baseQuery.Where("is_died = ?", *opts.IsDied)
 	}
+	if opts.SkipHealthCheck != nil {
+		baseQuery = baseQuery.Where("skip_health_check = ?", *opts.SkipHealthCheck)
+	}
 	if opts.Email != "" {
 		baseQuery = baseQuery.Where("email = ?", opts.Email)
 	}
@@ -108,7 +111,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.Offset > 0 {
 		query = query.Offset(opts.Offset)
 	}
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
 		return resp, fmt.Errorf("could not query friend links: %w", err)
 	}
@@ -119,7 +122,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 // GetFriendLinkByID fetches a single friend link by ID.
 func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("id = ?", id).First(&link).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -133,7 +136,7 @@ func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 // GetFriendLinkByEmail fetches a single friend link by email.
 func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("email = ?", email).First(&link).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -270,15 +273,16 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 
 	// Whitelist of updatable columns
 	updatableColumns := map[string]bool{
-		"website_name":     true,
-		"website_url":      true,
-		"website_icon_url": true,
-		"description":      true,
-		"email":            true,
-		"times":            true,
-		"status":           true,
-		"enable_rss":       true,
-		"is_died":          true,
+		"website_name":      true,
+		"website_url":       true,
+		"website_icon_url":  true,
+		"description":       true,
+		"email":             true,
+		"times":             true,
+		"status":            true,
+		"enable_rss":        true,
+		"is_died":           true,
+		"skip_health_check": true,
 	}
 
 	updates := map[string]interface{}{}

@@ -23,7 +23,6 @@
           <el-option label="待定" value="pending"></el-option>
           <el-option label="超时" value="timeout"></el-option>
           <el-option label="错误" value="error"></el-option>
-          <el-option label="忽略" value="ignored"></el-option>
         </el-select>
         <el-input v-model="searchQuery" placeholder="搜索友链" clearable @input="handleSearch"
           style="width: 200px; margin-right: 10px" />
@@ -53,6 +52,11 @@
             <el-table-column prop="updated_at" label="更新时间" width="180">
               <template #default="{ row }">
                 {{ formatDate(row.updated_at) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="不巡查" width="100">
+              <template #default="{ row }">
+                <el-switch :model-value="row.skip_health_check" @change="handleHealthCheckToggle(row)" />
               </template>
             </el-table-column>
             <el-table-column label="订阅 RSS" width="100">
@@ -112,7 +116,6 @@
             <el-option label="待定" value="pending"></el-option>
             <el-option label="超时" value="timeout"></el-option>
             <el-option label="错误" value="error"></el-option>
-            <el-option label="忽略" value="ignored"></el-option>
           </el-select>
         </el-form-item>
       </el-form>
@@ -156,8 +159,9 @@ const form = reactive<{
   description: string
   email: string
   times: number
-  status: 'survival' | 'timeout' | 'error' | 'pending' | 'ignored'
+  status: 'survival' | 'timeout' | 'error' | 'pending'
   enable_rss: boolean
+  skip_health_check: boolean
   is_died: boolean
 }>({
   id: 0,
@@ -169,6 +173,7 @@ const form = reactive<{
   times: 0,
   status: 'pending',
   enable_rss: true,
+  skip_health_check: false,
   is_died: false
 })
 
@@ -244,6 +249,7 @@ const resetForm = () => {
     times: 0,
     status: 'pending',
     enable_rss: true,
+    skip_health_check: false,
     is_died: false
   })
 }
@@ -299,7 +305,6 @@ const statusTagType = (status: string) => {
     case 'survival':
       return 'success'
     case 'pending':
-    case 'ignored':
       return 'info'
     case 'timeout':
       return 'warning'
@@ -309,6 +314,21 @@ const statusTagType = (status: string) => {
       return 'info'
   }
 }
+const handleHealthCheckToggle = async (link: FriendLink) => {
+  const originalValue = link.skip_health_check
+  const newValue = !originalValue
+
+  link.skip_health_check = newValue
+  try {
+    await updateFriendLink(link.id, { data: { skip_health_check: newValue } })
+    ElMessage.success(`已${newValue ? '停止' : '恢复'}巡查`)
+    fetchFriendLinks()
+  } catch (error) {
+    link.skip_health_check = originalValue
+    ElMessage.error('更新巡查状态失败')
+  }
+}
+
 const handleRssToggle = async (link: FriendLink) => {
   const originalValue = link.enable_rss
   const newValue = !originalValue
