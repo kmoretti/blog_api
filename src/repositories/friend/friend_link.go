@@ -2,7 +2,6 @@ package friendsRepositories
 
 import (
 	"blog_api/src/model"
-	"errors"
 	"fmt"
 	"log"
 
@@ -14,7 +13,6 @@ import (
 func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 	var count int64
 	if err := db.Model(&model.FriendWebsite{}).Count(&count).Error; err != nil {
-		log.Printf("[db][friend][ERR]无法检查友链是否存在: %v", err)
 		return err
 	}
 
@@ -42,8 +40,7 @@ func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 
 		result := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&newLink)
 		if result.Error != nil {
-			log.Printf("[db][friend][ERR]无法插入友链 %s: %v", link.Name, result.Error)
-			continue
+			return result.Error
 		}
 
 		if result.RowsAffected == 0 {
@@ -93,13 +90,13 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 
 	if opts.Count {
 		if err := baseQuery.Count(&resp.Count).Error; err != nil {
-			return resp, fmt.Errorf("could not count friend links: %w", err)
+			return resp, err
 		}
 		return resp, nil
 	}
 
 	if err := baseQuery.Count(&resp.Count).Error; err != nil {
-		return resp, fmt.Errorf("could not count friend links for pagination: %w", err)
+		return resp, err
 	}
 
 	query := baseQuery.Order("updated_at DESC")
@@ -113,7 +110,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	}
 	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
-		return resp, fmt.Errorf("could not query friend links: %w", err)
+		return resp, err
 	}
 
 	return resp, nil
@@ -124,13 +121,7 @@ func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
 	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("id = ?", id).First(&link).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.FriendWebsite{}, err
-		}
-		return model.FriendWebsite{}, fmt.Errorf("could not query friend link by id %d: %w", id, err)
-	}
-	return link, nil
+	return link, err
 }
 
 // GetFriendLinkByEmail fetches a single friend link by email.
@@ -138,13 +129,7 @@ func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error
 	var link model.FriendWebsite
 	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("email = ?", email).First(&link).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.FriendWebsite{}, err
-		}
-		return model.FriendWebsite{}, fmt.Errorf("could not query friend link by email %s: %w", email, err)
-	}
-	return link, nil
+	return link, err
 }
 
 // UpdateFriendLink updates the details of a friend link after crawling.
@@ -183,7 +168,7 @@ func UpdateFriendLink(db *gorm.DB, link model.FriendWebsite, result model.CrawlR
 	}
 
 	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", link.ID).Updates(updates).Error; err != nil {
-		return fmt.Errorf("could not update friend link with id %d: %w", link.ID, err)
+		return err
 	}
 
 	log.Printf("为 ID  %d 更新友链. 状态: %s, 时间: %d, is_died: %t", link.ID, link.Status, link.Times, link.IsDied)
@@ -203,7 +188,7 @@ func CreateFriendLink(db *gorm.DB, link model.FriendWebsite) (int64, error) {
 	}
 
 	if err := db.Create(&newLink).Error; err != nil {
-		return 0, fmt.Errorf("could not execute insert statement for friend link: %w", err)
+		return 0, err
 	}
 
 	log.Printf("[db][friend] 已插入新友链: %s，ID 为: %d", link.Name, newLink.ID)
@@ -216,7 +201,7 @@ func DeleteFriendLinkByID(db *gorm.DB, id uint) (model.FriendWebsite, error) {
 	var rowsDeleted int64
 	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", id).First(&deletedLink).Error; err != nil {
-			return fmt.Errorf("could not query friend link for deletion: %w", err)
+			return err
 		}
 
 		if err := DeleteRssDataByFriendLinkID(tx, int(id)); err != nil {
@@ -225,7 +210,7 @@ func DeleteFriendLinkByID(db *gorm.DB, id uint) (model.FriendWebsite, error) {
 
 		res := tx.Delete(&deletedLink)
 		if res.Error != nil {
-			return fmt.Errorf("could not delete friend link: %w", res.Error)
+			return res.Error
 		}
 		rowsDeleted = res.RowsAffected
 		return nil
@@ -252,7 +237,7 @@ func DeleteFriendLinkByOwner(db *gorm.DB, id uint, email string) (model.FriendWe
 		}
 		result := tx.Where("id = ? AND email = ?", id, email).Delete(&model.FriendWebsite{})
 		if result.Error != nil {
-			return fmt.Errorf("could not delete owned friend link: %w", result.Error)
+			return result.Error
 		}
 		if result.RowsAffected == 0 {
 			return gorm.ErrRecordNotFound
@@ -321,7 +306,7 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		// Perform the update
 		result := tx.Model(&model.FriendWebsite{}).Where("id = ?", id).Updates(updates)
 		if result.Error != nil {
-			return fmt.Errorf("could not execute update for friend link id %d: %w", id, result.Error)
+			return result.Error
 		}
 		rowsAffected = result.RowsAffected
 		return nil
@@ -374,7 +359,7 @@ func UpdateFriendLinkByOwner(db *gorm.DB, id uint, email string, req model.EditF
 		if err := tx.Model(&model.FriendWebsite{}).
 			Where("id = ? AND email = ?", id, email).
 			Count(&count).Error; err != nil {
-			return fmt.Errorf("could not validate friend link ownership: %w", err)
+			return err
 		}
 		if count == 0 {
 			return gorm.ErrRecordNotFound
@@ -388,7 +373,7 @@ func UpdateFriendLinkByOwner(db *gorm.DB, id uint, email string, req model.EditF
 			Where("id = ? AND email = ?", id, email).
 			Updates(updates)
 		if result.Error != nil {
-			return fmt.Errorf("could not update owned friend link: %w", result.Error)
+			return result.Error
 		}
 		rowsAffected = result.RowsAffected
 		return nil
@@ -400,7 +385,7 @@ func UpdateFriendLinkByOwner(db *gorm.DB, id uint, email string, req model.EditF
 func FriendLinkExists(db *gorm.DB, id int) (bool, error) {
 	var count int64
 	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", id).Count(&count).Error; err != nil {
-		return false, fmt.Errorf("could not check for existing friend_link: %w", err)
+		return false, err
 	}
 	return count > 0, nil
 }

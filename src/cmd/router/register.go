@@ -82,6 +82,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 				friendActionGroup.POST("", updataHandler.CreateFriendLink)
 				friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
 				friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
+				friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
 			}
 			rssActionGroup := actionGroup.Group("/rss")
 			{

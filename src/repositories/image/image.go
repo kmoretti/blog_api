@@ -22,7 +22,6 @@ func BatchInsertImages(db *gorm.DB, images []model.Image) error {
 	}).CreateInBatches(&images, 256)
 
 	if result.Error != nil {
-		log.Printf("[db][image][ERR] 无法批量插入图片: %v", result.Error)
 		return result.Error
 	}
 
@@ -62,7 +61,6 @@ func QueryImages(db *gorm.DB, opts model.ImageQueryOptions) (model.QueryImageRes
 func CreateImage(db *gorm.DB, image *model.Image) error {
 	err := db.Create(image).Error
 	if err != nil {
-		log.Printf("[db][image][ERR] 无法创建图片: %v", err)
 		return err
 	}
 	log.Printf("[db][image] 成功创建图片记录，ID: %d", image.ID)
@@ -97,9 +95,10 @@ func UpdateImage(db *gorm.DB, image *model.Image) error {
 	}
 
 	result := db.Model(&model.Image{}).Where("id = ?", image.ID).Updates(updates)
-
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
-		log.Printf("[db][image][WARN] 未找到要更新的图片，ID: %d", image.ID)
 		return gorm.ErrRecordNotFound
 	}
 
@@ -110,8 +109,10 @@ func UpdateImage(db *gorm.DB, image *model.Image) error {
 // DeleteImage deletes an image record from the database by its ID.
 func DeleteImage(db *gorm.DB, id int) error {
 	result := db.Delete(&model.Image{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
-		log.Printf("[db][image][WARN] 未找到要删除的图片，ID: %d", id)
 		return gorm.ErrRecordNotFound
 	}
 
@@ -124,7 +125,6 @@ func GetImageByID(db *gorm.DB, id int) (*model.Image, error) {
 	var image model.Image
 	err := db.First(&image, id).Error
 	if err != nil {
-		log.Printf("[db][image][ERR] 无法通过ID %d 找到图片: %v", id, err)
 		return nil, err
 	}
 	return &image, nil
@@ -145,7 +145,6 @@ func GetRandomImage(db *gorm.DB) (*model.Image, error) {
 	offset := rand.Int64N(count)
 	err := query.Order("id ASC").Offset(int(offset)).First(&image).Error
 	if err != nil {
-		log.Printf("[db][image][ERR] 无法获取随机图片: %v", err)
 		return nil, err
 	}
 	return &image, nil
@@ -158,7 +157,6 @@ func ListImagesAfterID(db *gorm.DB, afterID, limit int) ([]model.Image, error) {
 		return images, nil
 	}
 	if err := db.Where("id > ?", afterID).Order("id ASC").Limit(limit).Find(&images).Error; err != nil {
-		log.Printf("[db][image][ERR] 无法获取图片列表: %v", err)
 		return nil, err
 	}
 	return images, nil

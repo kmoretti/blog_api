@@ -3,7 +3,9 @@ package handler
 import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
+	crawlerService "blog_api/src/service/crawler"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -201,4 +203,48 @@ func (h *FriendLinkHandler) GetFullFriendLinks(c *gin.Context) {
 // GetFullFriendLinkByID handles GET /api/action/friend/:id request (authenticated)
 func (h *FriendLinkHandler) GetFullFriendLinkByID(c *gin.Context) {
 	h.getFriendLinkByID(c, true)
+}
+
+// RecheckFriendLink handles POST /api/action/friend/:id/recheck.
+// It performs one inspection even when scheduled health checks are disabled.
+func (h *FriendLinkHandler) RecheckFriendLink(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "invalid friend link ID"))
+		return
+	}
+
+	link, err := friendsRepositories.GetFriendLinkByID(h.DB, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, model.NewErrorResponse(http.StatusNotFound, "friend link not found"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "failed to retrieve friend link"))
+		return
+	}
+
+	result := crawlerService.CrawlWebsite(c.Request.Context(), link.Link)
+	if c.Request.Context().Err() != nil {
+		return
+	}
+	if err := friendsRepositories.UpdateFriendLink(h.DB, link, result); err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "failed to update friend link inspection"))
+		return
+	}
+
+	if link.EnableRss {
+		for _, rssURL := range result.RssURLs {
+			name, err := crawlerService.GetRssTitle(rssURL)
+			if err != nil {
+				log.Printf("[handler][friend] failed to get RSS title %s: %v", rssURL, err)
+				continue
+			}
+			if _, err := friendsRepositories.CreateFriendRssFeeds(h.DB, link.ID, rssURL, name); err != nil {
+				log.Printf("[handler][friend] failed to add RSS feed %s for friend link %d: %v", rssURL, link.ID, err)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, model.NewSuccessResponse(nil))
 }

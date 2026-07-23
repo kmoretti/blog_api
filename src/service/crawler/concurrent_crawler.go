@@ -98,7 +98,7 @@ func crawlWorker(ctx context.Context, id int, jobs <-chan CrawlJob, results chan
 				return
 			}
 			log.Printf("[ConcurrentCrawler][Worker %d] 正在爬取: %s", id, job.Link.Link)
-			result := crawlWebsite(ctx, job.Link.Link)
+			result := CrawlWebsite(ctx, job.Link.Link)
 			select {
 			case results <- CrawlJobResult{Link: job.Link, Result: result}:
 			case <-ctx.Done():

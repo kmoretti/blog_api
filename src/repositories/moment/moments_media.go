@@ -14,10 +14,13 @@ func CreateMomentMedia(db *gorm.DB, media *model.MomentMedia) error {
 // DeleteMomentMedia deletes a media record by its ID.
 func DeleteMomentMedia(db *gorm.DB, id int) error {
 	result := db.Where("id = ?", id).Delete(&model.MomentMedia{})
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // UpdateMomentMedia updates fields for a media record.
@@ -27,10 +30,13 @@ func UpdateMomentMedia(db *gorm.DB, id int, updates map[string]interface{}) erro
 	}
 
 	result := db.Model(&model.MomentMedia{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // QueryMedia retrieves media based on pagination and filters, returning the list and total count.

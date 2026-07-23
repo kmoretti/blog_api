@@ -21,7 +21,9 @@ var crawlerHTTPClient = &http.Client{
 	},
 }
 
-func crawlWebsite(ctx context.Context, rawURL string) model.CrawlResult {
+// CrawlWebsite inspects one website and returns its health and discovered metadata.
+// Transport and parsing failures are represented by the result status.
+func CrawlWebsite(ctx context.Context, rawURL string) model.CrawlResult {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		log.Printf("[crawler]创建获取 %s 的请求时出错: %v", rawURL, err)

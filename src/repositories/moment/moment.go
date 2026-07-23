@@ -77,10 +77,13 @@ func UpdateMoment(db *gorm.DB, id int, updates map[string]interface{}) error {
 	}
 
 	result := db.Model(&model.Moment{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // GetMomentByID retrieves a moment by ID.
@@ -95,10 +98,13 @@ func GetMomentByID(db *gorm.DB, id int) (*model.Moment, error) {
 // DeleteMomentByChannelMessage deletes a moment using channel_id and message_id.
 func DeleteMomentByChannelMessage(db *gorm.DB, channelID, messageID int64) error {
 	result := db.Where("channel_id = ? AND message_id = ?", channelID, messageID).Delete(&model.Moment{})
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // MomentExistsByChannelMessage checks if a moment already exists for a channel/message pair.

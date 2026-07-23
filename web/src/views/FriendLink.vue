@@ -64,8 +64,14 @@
                 <el-switch :model-value="row.enable_rss" @change="handleRssToggle(row)" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
+                <el-button type="success" link :icon="Refresh"
+                  :loading="recheckingId === row.id"
+                  :disabled="recheckingId !== null && recheckingId !== row.id"
+                  @click="handleRecheck(row.id)">
+                  重新巡查
+                </el-button>
                 <el-button type="primary" link :icon="Edit" @click="openFormDialog(row)">
                   编辑
                 </el-button>
@@ -130,13 +136,14 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, Refresh } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getFriendLinks,
   createFriendLink,
   updateFriendLink,
-  deleteFriendLink
+  deleteFriendLink,
+  recheckFriendLink
 } from '@/api/friendLink'
 import type { FriendLink } from '@/model/friendLink'
 import { usePagination } from '@/utils/pagination'
@@ -145,6 +152,7 @@ import { formatDate } from '@/utils/date'
 // Reactive State
 const friendLinks = ref<FriendLink[]>([])
 const loading = ref(false)
+const recheckingId = ref<number | null>(null)
 const filterStatus = ref('')
 const filterIsDied = ref<boolean | null>(null)
 const searchQuery = ref('')
@@ -297,6 +305,21 @@ const handleDelete = (id: number) => {
       ElMessage.error('删除失败')
     }
   })
+}
+
+const handleRecheck = async (id: number) => {
+  if (recheckingId.value !== null) return
+
+  recheckingId.value = id
+  try {
+    await recheckFriendLink(id)
+    ElMessage.success('巡查完成')
+    await fetchFriendLinks()
+  } catch {
+    // The response interceptor reports request failures.
+  } finally {
+    recheckingId.value = null
+  }
 }
 
 // UI Helpers
