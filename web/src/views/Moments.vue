@@ -71,7 +71,7 @@
         />
       </div>
 
-      <ExtensionEditor v-model="composer.extension" />
+      <ExtensionEditor :key="composer.extensionEditorKey" v-model="composer.extension" />
 
       <div v-if="showComposerExternalInput" class="external-link-input">
         <el-input v-model="composer.externalUrl" placeholder="粘贴外部图片/视频 URL" size="small" class="el-input-url" clearable />
@@ -408,7 +408,8 @@ const composer = reactive({
   tags: '',
   pinnedOrder: 0,
   isAd: false,
-  extension: null as string | null
+  extension: null as string | null,
+  extensionEditorKey: 0
 })
 
 const columnCount = ref(3)
@@ -677,6 +678,7 @@ const handleCreateMoment = async () => {
     composer.mediaItems = []
     composer.externalLinks = []
     composer.extension = null
+    composer.extensionEditorKey += 1
     reset()
     fetchMoments()
   } catch (error) {
