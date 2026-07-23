@@ -177,13 +177,18 @@ func UpdateFriendLink(db *gorm.DB, link model.FriendWebsite, result model.CrawlR
 
 // CreateFriendLink inserts a single new friend link into the database.
 func CreateFriendLink(db *gorm.DB, link model.FriendWebsite) (int64, error) {
+	status := link.Status
+	if status == "" {
+		status = "pending"
+	}
+
 	newLink := model.FriendWebsite{
 		Name:      link.Name,
 		Link:      link.Link,
 		Avatar:    link.Avatar,
 		Info:      link.Info,
 		Email:     link.Email,
-		Status:    "pending",
+		Status:    status,
 		EnableRss: link.EnableRss,
 	}
 

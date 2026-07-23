@@ -179,7 +179,7 @@ const form = reactive<{
   description: '',
   email: '',
   times: 0,
-  status: 'pending',
+  status: 'survival',
   enable_rss: true,
   skip_health_check: false,
   is_died: false
@@ -255,7 +255,7 @@ const resetForm = () => {
     description: '',
     email: '',
     times: 0,
-    status: 'pending',
+    status: 'survival',
     enable_rss: true,
     skip_health_check: false,
     is_died: false

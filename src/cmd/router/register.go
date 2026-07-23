@@ -27,7 +27,12 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	RssHandler := &handlerAction.FriendRssHandler{DB: db}
 	authHandlerInstance := authHandler.NewAuthHandler()
 	verifyHandler := &authHandler.VerifyHandler{DB: db}
-	statusHandler := &handler.StatusHandler{DB: db, StartTime: startTime}
+	statusHandler := &handler.StatusHandler{
+		DB:           db,
+		StartTime:    startTime,
+		DatabasePath: cfg.Data.Database.Path,
+		DataPath:     "data",
+	}
 	imageHandler := &handlerAction.ImageHandler{DB: db}
 	resourceHandler := handlerAction.NewResourceHandler(cfg, ossService)
 	imagePublicHandler := handler.NewImagePublicHandler(db)

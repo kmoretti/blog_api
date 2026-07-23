@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// InsertRssPost inserts a new post into the database, avoiding duplicates.
+// InsertRssPost inserts a post unless another post already owns the same link.
 func InsertRssPost(db *gorm.DB, post *model.RssPost) error {
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "link"}},
@@ -19,7 +19,6 @@ func InsertRssPost(db *gorm.DB, post *model.RssPost) error {
 	}
 
 	if result.RowsAffected == 0 {
-		log.Printf("链接为 %s 的文章已存在，跳过", post.Link)
 		return nil
 	}
 

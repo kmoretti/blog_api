@@ -37,6 +37,9 @@ func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 			return
 		}
 		req.Email = email
+		req.Status = "pending"
+	} else {
+		req.Status = "survival"
 	}
 
 	// Insert into database
