@@ -23,6 +23,8 @@ export interface StatusData {
 export interface SystemStatus {
   uptime: string
   status_data: StatusData
+  database_size_bytes: number
+  data_folder_size_bytes: number
   time: number
 }
 

@@ -15,6 +15,12 @@
           <el-col :xs="24" :sm="24" :md="8" :lg="8">
             <el-statistic title="在线时长" :value="uptimeSeconds" />
           </el-col>
+          <el-col :xs="24" :sm="24" :md="8" :lg="8">
+            <el-statistic title="数据库占用" :value="formatBytes(stats.database_size_bytes)" />
+          </el-col>
+          <el-col :xs="24" :sm="24" :md="8" :lg="8">
+            <el-statistic title="数据目录占用" :value="formatBytes(stats.data_folder_size_bytes)" />
+          </el-col>
         </el-row>
       </div>
     </el-card>
@@ -62,6 +68,8 @@ const lineChart = ref<HTMLElement | null>(null)
 
 const stats = ref<SystemStatus>({
   uptime: '0s',
+  database_size_bytes: 0,
+  data_folder_size_bytes: 0,
   status_data: {
     friend_link_count: 0,
     rss_count: 0,
@@ -82,6 +90,19 @@ function parseUptime(uptime: string): number {
   const matchSec = uptime.match(/(\d+)s/)
   if (matchSec) return parseInt(matchSec[1])
   return 0
+}
+
+const formatBytes = (bytes: number): string => {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const unitIndex = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / 1024 ** unitIndex
+  const fractionDigits = unitIndex === 0 || value >= 100 ? 0 : value >= 10 ? 1 : 2
+
+  return `${value.toFixed(fractionDigits)} ${units[unitIndex]}`
 }
 
 onMounted(async () => {
@@ -142,6 +163,7 @@ const initCharts = () => {
   const textColor = getChartTextColor()
   if (pieChart.value) {
     const pie = echarts.init(pieChart.value)
+    chartInstances.push(pie)
     pie.setOption({
       backgroundColor: 'transparent',
       title: {
@@ -252,6 +274,11 @@ const initCharts = () => {
 .stats-section {
   margin-top: 16px;
 }
+
+.stats-section :deep(.el-col) {
+  margin-bottom: 20px;
+}
+
 @media (max-width: 767px) {
   .chart-container {
     height: 250px !important;

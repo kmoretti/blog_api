@@ -32,7 +32,6 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		DB:           db,
 		StartTime:    startTime,
 		DatabasePath: cfg.Data.Database.Path,
-		DataPath:     "data",
 	}
 	imageHandler := &handlerAction.ImageHandler{DB: db}
 	resourceHandler := handlerAction.NewResourceHandler(cfg, ossService)
