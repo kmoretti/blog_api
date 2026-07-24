@@ -74,9 +74,11 @@ func ParseRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
 		if publishedTime == nil {
 			// If PublishedParsed is nil, use UpdatedParsed
 			publishedTime = item.UpdatedParsed
-			if publishedTime == nil {
-				continue
-			}
+		}
+		if publishedTime == nil {
+			// 部分 RSS 源没有标准日期字段，避免整批文章被跳过
+			publishedTime = new(time.Time)
+			*publishedTime = time.Now()
 		}
 
 		publishedUnix := publishedTime.Unix()

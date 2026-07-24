@@ -102,6 +102,26 @@ func (h *FriendRssHandler) EditRss(c *gin.Context) {
 		return
 	}
 
+	var existing model.FriendRss
+	if err := h.DB.First(&existing, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "查询 RSS 失败: "+err.Error()))
+		return
+	}
+
+	// 判断更新后是否需要立即重新抓取文章
+	urlChanged := false
+	if newURL, ok := req.Data["rss_url"].(string); ok && newURL != existing.RssURL {
+		urlChanged = true
+	}
+	revived := false
+	if newIsDied, ok := req.Data["is_died"].(bool); ok && existing.IsDied && !newIsDied {
+		revived = true
+	}
+	unpaused := false
+	if newStatus, ok := req.Data["status"].(string); ok && existing.Status == "pause" && newStatus != "pause" {
+		unpaused = true
+	}
+
 	rowsAffected, err := friendsRepositories.UpdateFriendRssByID(h.DB, uint(id), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "更新 RSS 失败: "+err.Error()))
@@ -111,6 +131,14 @@ func (h *FriendRssHandler) EditRss(c *gin.Context) {
 	if rowsAffected == 0 {
 		c.JSON(http.StatusNotFound, model.NewErrorResponse(http.StatusNotFound, "未找到指定 ID 的 RSS 或没有字段需要更新"))
 		return
+	}
+
+	if urlChanged || revived || unpaused {
+		parseURL := existing.RssURL
+		if urlChanged {
+			parseURL = req.Data["rss_url"].(string)
+		}
+		go crawlerService.ParseRssFeed(h.DB, int(id), parseURL)
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))
