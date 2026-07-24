@@ -4,7 +4,7 @@
       <el-icon><ChatDotRound /></el-icon>
     </template>
     <template #header-actions>
-      <el-link :href="payload.url" target="_blank" type="primary" :underline="false" size="small">
+      <el-link :href="payload.url" target="_blank" type="primary" :underline="'never'" size="small">
         查看 <el-icon><TopRight /></el-icon>
       </el-link>
     </template>

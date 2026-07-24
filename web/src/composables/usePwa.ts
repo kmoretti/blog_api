@@ -15,6 +15,9 @@ export function usePwa() {
   const canInstall = ref(false)
 
   function onBeforeInstallPrompt(e: Event) {
+    // 只有用户明确启用了 PWA 时才拦截默认安装横幅，并使用自定义安装入口。
+    // 否则不阻止默认行为，避免控制台出现“必须调用 prompt()”的提示。
+    if (!pwaEnabled.value) return
     e.preventDefault()
     deferredPrompt = e
     canInstall.value = true

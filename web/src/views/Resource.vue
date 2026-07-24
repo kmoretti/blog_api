@@ -12,7 +12,7 @@
                 class="breadcrumb-item"
               >
                 <el-link
-                  :underline="false"
+                  :underline="'never'"
                   @click="handleBreadcrumbClick(crumb.path)"
                 >
                   {{ crumb.label }}
@@ -49,7 +49,7 @@
               </el-icon>
               <el-link
                 v-if="row.is_dir"
-                :underline="false"
+                :underline="'never'"
                 @click="handleOpen(row)"
               >
                 {{ row.name }}
