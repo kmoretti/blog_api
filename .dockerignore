@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+.codex
+.env
+
+data
+release
+
+web/node_modules
+web/dist
+
+*.log
+blog_api

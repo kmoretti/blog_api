@@ -99,7 +99,9 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 		return resp, err
 	}
 
-	query := baseQuery.Order("updated_at DESC")
+	// The primary-key tie-breaker keeps offset pagination stable when a trigger
+	// gives several rows the same second-resolution timestamp.
+	query := baseQuery.Order("updated_at DESC").Order("id DESC")
 
 	// Apply pagination and ordering
 	if opts.Limit > 0 {

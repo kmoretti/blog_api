@@ -25,7 +25,7 @@ func QueryMoments(db *gorm.DB, page, pageSize int, status string) ([]model.Momen
 		query = query.Offset(offset).Limit(pageSize)
 	}
 
-	if err := query.Order("created_at desc").Find(&moments).Error; err != nil {
+	if err := query.Order("created_at DESC").Order("id DESC").Find(&moments).Error; err != nil {
 		return nil, 0, err
 	}
 
@@ -38,7 +38,10 @@ func GetMediaForMoments(db *gorm.DB, momentIDs []int) ([]model.MomentMedia, erro
 	if len(momentIDs) == 0 {
 		return media, nil
 	}
-	if err := db.Where("moment_id IN ? AND is_deleted = 0", momentIDs).Find(&media).Error; err != nil {
+	if err := db.Where("moment_id IN ? AND is_deleted = 0", momentIDs).
+		Order("moment_id ASC").
+		Order("id ASC").
+		Find(&media).Error; err != nil {
 		return nil, err
 	}
 
@@ -109,9 +112,14 @@ func DeleteMomentByChannelMessage(db *gorm.DB, channelID, messageID int64) error
 
 // MomentExistsByChannelMessage checks if a moment already exists for a channel/message pair.
 func MomentExistsByChannelMessage(db *gorm.DB, channelID, messageID int64) (bool, error) {
-	var count int64
-	if err := db.Model(&model.Moment{}).Where("channel_id = ? AND message_id = ?", channelID, messageID).Count(&count).Error; err != nil {
+	var id int
+	err := db.Model(&model.Moment{}).
+		Select("id").
+		Where("channel_id = ? AND message_id = ?", channelID, messageID).
+		Limit(1).
+		Scan(&id).Error
+	if err != nil {
 		return false, err
 	}
-	return count > 0, nil
+	return id > 0, nil
 }

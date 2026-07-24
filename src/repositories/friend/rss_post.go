@@ -49,7 +49,7 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 		dataTx = dataTx.Limit(query.PageSize).Offset(offset)
 	}
 
-	if err := dataTx.Order("p.time DESC").Scan(&posts).Error; err != nil {
+	if err := dataTx.Order("p.time DESC").Order("p.id DESC").Scan(&posts).Error; err != nil {
 		return nil, 0, err
 	}
 	for i := range posts {

@@ -50,6 +50,7 @@ func QueryFriendRss(db *gorm.DB, opts model.FriendRssQueryOptions) (model.QueryF
 		query = query.Offset(offset).Limit(opts.PageSize)
 	}
 
+	query = query.Order("friend_rss.updated_at DESC").Order("friend_rss.id DESC")
 	if err := query.Find(&resp.Feeds).Error; err != nil {
 		return resp, err
 	}

@@ -1,0 +1,96 @@
+{
+  "system_conf": {
+    "safe_conf": {
+      "allow_extension": [
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "mp4",
+        "webm",
+        "json",
+        "css",
+        "js",
+        "txt",
+        "md"
+      ],
+      "cors_allow_hostlist": [
+        "http://localhost:5173"
+      ],
+      "exclude_paths": [
+        "/config"
+      ]
+    },
+    "data_conf": {
+      "database": {
+        "path": "data/database.db"
+      },
+      "image": {
+        "path": "data/image",
+        "conv_to": "webp"
+      },
+      "resource": {
+        "path": "data/"
+      }
+    },
+    "crawler_conf": {
+      "concurrency": 5,
+      "rss_timeout_seconds": 15
+    },
+    "moments_integrated_conf": {
+      "enable": false,
+      "api_single_return_entries": 20,
+      "integrated": {
+        "telegram": {
+          "enable": false,
+          "sync_delete": false,
+          "bot_token": "",
+          "channel_id": "",
+          "media_path": "telegram",
+          "filter_userid": [],
+          "start_time": 0
+        },
+        "discord": {
+          "enable": false,
+          "sync_delete": false,
+          "bot_token": "",
+          "guild_id": "",
+          "channel_id": "",
+          "filter_userid": []
+        }
+      }
+    },
+    "oss_conf": {
+      "provider": "aliyun",
+      "enable": false,
+      "accessKeyId": "",
+      "accessKeySecret": "",
+      "bucket": "",
+      "endpoint": "",
+      "region": "",
+      "customDomain": "",
+      "secure": true,
+      "timeout": 30,
+      "prefix": ""
+    },
+    "verify_conf": {
+      "turnstile": {
+        "enable": false,
+        "secret": "",
+        "site_key": ""
+      },
+      "fingerprint": {
+        "secret": "change-me"
+      }
+    },
+    "email_conf": {
+      "enable": false,
+      "host": "",
+      "user_name": "",
+      "password": "",
+      "port": 465,
+      "sender": ""
+    }
+  }
+}
