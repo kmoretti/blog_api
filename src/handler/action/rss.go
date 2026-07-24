@@ -63,6 +63,9 @@ func (h *FriendRssHandler) CreateRss(c *gin.Context) {
 		return
 	}
 
+	// 创建成功后立即在后台抓取一次文章，避免用户刷新后仍看不到内容
+	go crawlerService.ParseRssFeed(h.DB, createdFeed.ID, createdFeed.RssURL)
+
 	c.JSON(http.StatusCreated, model.NewSuccessResponse(gin.H{"id": createdFeed.ID}))
 }
 

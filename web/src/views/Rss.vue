@@ -211,7 +211,7 @@ const handleCreate = () => {
 const handleCreateSave = async () => {
   try {
     const res = await createRssFeed(createForm.name, createForm.rss_url)
-    if (res.code === 201) {
+    if (res.code === 200) {
       ElMessage.success('创建成功')
       createDialogVisible.value = false
       await fetchFeeds()
