@@ -48,11 +48,10 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("could not connect to database via gorm: %w", err)
 	}
 
-	migrationFiles, err := filepath.Glob("migrations/*.sql")
+	migrationFiles, err := collectMigrationFiles()
 	if err != nil {
 		return nil, fmt.Errorf("could not find migration files: %w", err)
 	}
-	sort.Strings(migrationFiles)
 
 	if err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -107,6 +106,45 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 
 	log.Println("Database migrations completed successfully.")
 	return db, nil
+}
+
+// collectMigrationFiles returns the ordered list of SQL migration files to apply.
+// Primary migrations come from migrations/*.sql (sorted alphabetically), and
+// manual migrations come from migrations/manual/*.sql (sorted alphabetically),
+// running after the primary migrations so they can alter columns created earlier.
+// Deduplication by basename across both directories is enforced; only one of
+// each basename is kept (the primary one wins).
+func collectMigrationFiles() ([]string, error) {
+	primary, err := filepath.Glob("migrations/*.sql")
+	if err != nil {
+		return nil, err
+	}
+	manual, err := filepath.Glob("migrations/manual/*.sql")
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(primary)
+	sort.Strings(manual)
+
+	seen := make(map[string]bool, len(primary)+len(manual))
+	files := make([]string, 0, len(primary)+len(manual))
+	for _, f := range primary {
+		name := filepath.Base(f)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		files = append(files, f)
+	}
+	for _, f := range manual {
+		name := filepath.Base(f)
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		files = append(files, f)
+	}
+	return files, nil
 }
 
 // splitSQLStatements splits SQL content by semicolons, respecting BEGIN...END blocks

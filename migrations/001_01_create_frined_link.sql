@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS friend_link (
 CREATE INDEX IF NOT EXISTS idx_friend_link_status ON friend_link (status);
 CREATE INDEX IF NOT EXISTS idx_friend_link_website_url ON friend_link (website_url);
 CREATE INDEX IF NOT EXISTS idx_friend_link_email ON friend_link (email);
-CREATE INDEX IF NOT EXISTS idx_friend_link_skip_health_check ON friend_link (skip_health_check);
 
 -- 为 friend_link 表创建触发器, 用于自动更新 updated_at
 CREATE TRIGGER IF NOT EXISTS trg_friend_link_updated_at
