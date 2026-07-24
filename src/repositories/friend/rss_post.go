@@ -5,15 +5,11 @@ import (
 	"log"
 
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // InsertRssPost inserts a post unless another post already owns the same link.
 func InsertRssPost(db *gorm.DB, post *model.RssPost) error {
-	result := db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "link"}},
-		DoNothing: true,
-	}).Create(post)
+	result := db.Where(model.RssPost{Link: post.Link}).FirstOrCreate(post)
 	if result.Error != nil {
 		return result.Error
 	}
