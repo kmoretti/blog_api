@@ -32,16 +32,11 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 		},
 	)
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	db, err := gorm.Open(sqlite.Open(sqliteDSN(dbPath)), &gorm.Config{
 		Logger: newLogger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not open database: %w", err)
-	}
-
-	// Enable foreign keys
-	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
-		return nil, fmt.Errorf("could not enable foreign keys: %w", err)
 	}
 
 	sqlDB, err := db.DB()
@@ -59,7 +54,25 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 	}
 	sort.Strings(migrationFiles)
 
+	if err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			name TEXT PRIMARY KEY,
+			applied_at INTEGER NOT NULL
+		)
+	`).Error; err != nil {
+		return nil, fmt.Errorf("could not initialize migration history: %w", err)
+	}
+
 	for _, file := range migrationFiles {
+		name := filepath.Base(file)
+		var applied int64
+		if err := db.Model(&schemaMigration{}).Where("name = ?", name).Count(&applied).Error; err != nil {
+			return nil, fmt.Errorf("could not check migration %s: %w", file, err)
+		}
+		if applied > 0 {
+			continue
+		}
+
 		log.Printf("[Repo]运行迁移: %s\n", file)
 		content, err := os.ReadFile(file)
 		if err != nil {
@@ -68,19 +81,27 @@ func InitDB(cfg *model.Config) (*gorm.DB, error) {
 
 		// Split by semicolons respecting BEGIN...END blocks (triggers, procedures)
 		statements := splitSQLStatements(string(content))
-		for _, stmt := range statements {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			if err := db.Exec(stmt).Error; err != nil {
-				// Ignore "duplicate column" errors for ALTER TABLE (migration re-run safety)
-				if strings.Contains(err.Error(), "duplicate column name") {
-					log.Printf("[Repo]跳过已存在的列: %v", err)
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			for _, stmt := range statements {
+				stmt = strings.TrimSpace(stmt)
+				if stmt == "" {
 					continue
 				}
-				return nil, fmt.Errorf("could not execute migration statement in file %s: %w", file, err)
+				if err := tx.Exec(stmt).Error; err != nil {
+					// Ignore "duplicate column" errors for ALTER TABLE (migration re-run safety)
+					if strings.Contains(err.Error(), "duplicate column name") {
+						log.Printf("[Repo]跳过已存在的列: %v", err)
+						continue
+					}
+					return err
+				}
 			}
+			return tx.Create(&schemaMigration{
+				Name:      name,
+				AppliedAt: time.Now().Unix(),
+			}).Error
+		}); err != nil {
+			return nil, fmt.Errorf("could not execute migration statement in file %s: %w", file, err)
 		}
 	}
 
@@ -177,4 +198,21 @@ func toUpperStr(s string) string {
 
 func isIdentChar(ch rune) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
+}
+
+func sqliteDSN(path string) string {
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	return path + separator + "_foreign_keys=on&_busy_timeout=5000&_journal_mode=WAL&_synchronous=FULL&_secure_delete=on"
+}
+
+type schemaMigration struct {
+	Name      string `gorm:"column:name;primaryKey"`
+	AppliedAt int64  `gorm:"column:applied_at"`
+}
+
+func (schemaMigration) TableName() string {
+	return "schema_migrations"
 }

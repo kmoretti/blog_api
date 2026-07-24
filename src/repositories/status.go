@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"blog_api/src/model"
-	"fmt"
 
 	"gorm.io/gorm"
 )
@@ -27,7 +26,7 @@ func GetSystemStats(db *gorm.DB) (model.StatusData, error) {
 	}
 
 	if err := db.Raw(countsQuery).Scan(&counts).Error; err != nil {
-		return stats, fmt.Errorf("could not query system stats: %w", err)
+		return stats, err
 	}
 
 	stats.FriendLinkCount = counts.FriendLinkCount
@@ -41,7 +40,7 @@ func GetSystemStats(db *gorm.DB) (model.StatusData, error) {
 		GROUP BY status
 	`
 	if err := db.Raw(pieQuery).Scan(&pieData).Error; err != nil {
-		return stats, fmt.Errorf("could not query friend link status pie: %w", err)
+		return stats, err
 	}
 	stats.FriendLinkStatusPie = pieData
 
@@ -54,7 +53,7 @@ func GetSystemStats(db *gorm.DB) (model.StatusData, error) {
 		ORDER BY month
 	`
 	if err := db.Raw(monthlyQuery).Scan(&monthlyData).Error; err != nil {
-		return stats, fmt.Errorf("could not query monthly rss post count: %w", err)
+		return stats, err
 	}
 	stats.RssPostCountMonthly = monthlyData
 

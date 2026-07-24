@@ -23,7 +23,9 @@ type RssPostCountMonthly struct {
 
 // SystemStatus represents the overall system status response.
 type SystemStatus struct {
-	Uptime     string     `json:"uptime"`
-	StatusData StatusData `json:"status_data"`
-	Time       int64      `json:"time"`
+	Uptime              string     `json:"uptime"`
+	StatusData          StatusData `json:"status_data"`
+	DatabaseSizeBytes   int64      `json:"database_size_bytes"`
+	DataFolderSizeBytes int64      `json:"data_folder_size_bytes"`
+	Time                int64      `json:"time"`
 }

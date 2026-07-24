@@ -2,18 +2,22 @@ package config
 
 import (
 	"blog_api/src/model"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"os"
-
 	"github.com/spf13/viper"
 )
+
+//go:embed defaults/*.json
+var defaultConfigFiles embed.FS
 
 var (
 	globalConfig *model.Config
@@ -56,6 +60,9 @@ func loadConfig() (*model.Config, error) {
 	if configPath == "" {
 		configPath = "data/config"
 	}
+	if err := ensureDefaultConfigFiles(configPath); err != nil {
+		return nil, err
+	}
 	if err := mergeJSONConfig("system_config", configPath); err != nil {
 		return nil, err
 	}
@@ -68,6 +75,41 @@ func loadConfig() (*model.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func ensureDefaultConfigFiles(configPath string) error {
+	if err := os.MkdirAll(configPath, 0o755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %w", err)
+	}
+
+	defaults := []string{"system_config.json", "friend_list.json"}
+	for _, name := range defaults {
+		content, err := fs.ReadFile(defaultConfigFiles, "defaults/"+name)
+		if err != nil {
+			return fmt.Errorf("读取内嵌配置 %s 失败: %w", name, err)
+		}
+
+		path := filepath.Join(configPath, name)
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("创建默认配置 %s 失败: %w", path, err)
+		}
+
+		if _, err := file.Write(content); err != nil {
+			_ = file.Close()
+			_ = os.Remove(path)
+			return fmt.Errorf("写入默认配置 %s 失败: %w", path, err)
+		}
+		if err := file.Close(); err != nil {
+			_ = os.Remove(path)
+			return fmt.Errorf("关闭默认配置 %s 失败: %w", path, err)
+		}
+		log.Printf("[config]已释放默认配置: %s", path)
+	}
+	return nil
 }
 
 // mergeJSONConfig 合并指定的 JSON 配置文件

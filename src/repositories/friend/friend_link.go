@@ -2,7 +2,6 @@ package friendsRepositories
 
 import (
 	"blog_api/src/model"
-	"errors"
 	"fmt"
 	"log"
 
@@ -14,7 +13,6 @@ import (
 func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 	var count int64
 	if err := db.Model(&model.FriendWebsite{}).Count(&count).Error; err != nil {
-		log.Printf("[db][friend][ERR]无法检查友链是否存在: %v", err)
 		return err
 	}
 
@@ -42,8 +40,7 @@ func InsertFriendLinks(db *gorm.DB, friendLinks []model.FriendWebsite) error {
 
 		result := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&newLink)
 		if result.Error != nil {
-			log.Printf("[db][friend][ERR]无法插入友链 %s: %v", link.Name, result.Error)
-			continue
+			return result.Error
 		}
 
 		if result.RowsAffected == 0 {
@@ -78,6 +75,12 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.IsDied != nil {
 		baseQuery = baseQuery.Where("is_died = ?", *opts.IsDied)
 	}
+	if opts.SkipHealthCheck != nil {
+		baseQuery = baseQuery.Where("skip_health_check = ?", *opts.SkipHealthCheck)
+	}
+	if opts.Email != "" {
+		baseQuery = baseQuery.Where("email = ?", opts.Email)
+	}
 
 	// Apply search filter
 	if opts.Search != "" {
@@ -87,16 +90,18 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 
 	if opts.Count {
 		if err := baseQuery.Count(&resp.Count).Error; err != nil {
-			return resp, fmt.Errorf("could not count friend links: %w", err)
+			return resp, err
 		}
 		return resp, nil
 	}
 
 	if err := baseQuery.Count(&resp.Count).Error; err != nil {
-		return resp, fmt.Errorf("could not count friend links for pagination: %w", err)
+		return resp, err
 	}
 
-	query := baseQuery.Order("updated_at DESC")
+	// The primary-key tie-breaker keeps offset pagination stable when a trigger
+	// gives several rows the same second-resolution timestamp.
+	query := baseQuery.Order("updated_at DESC").Order("id DESC")
 
 	// Apply pagination and ordering
 	if opts.Limit > 0 {
@@ -105,9 +110,9 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.Offset > 0 {
 		query = query.Offset(opts.Offset)
 	}
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
-		return resp, fmt.Errorf("could not query friend links: %w", err)
+		return resp, err
 	}
 
 	return resp, nil
@@ -116,29 +121,17 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 // GetFriendLinkByID fetches a single friend link by ID.
 func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("id = ?", id).First(&link).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.FriendWebsite{}, err
-		}
-		return model.FriendWebsite{}, fmt.Errorf("could not query friend link by id %d: %w", id, err)
-	}
-	return link, nil
+	return link, err
 }
 
 // GetFriendLinkByEmail fetches a single friend link by email.
 func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, updated_at, snapshot, friend_link_page, feed"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("email = ?", email).First(&link).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.FriendWebsite{}, err
-		}
-		return model.FriendWebsite{}, fmt.Errorf("could not query friend link by email %s: %w", email, err)
-	}
-	return link, nil
+	return link, err
 }
 
 // UpdateFriendLink updates the details of a friend link after crawling.
@@ -177,7 +170,7 @@ func UpdateFriendLink(db *gorm.DB, link model.FriendWebsite, result model.CrawlR
 	}
 
 	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", link.ID).Updates(updates).Error; err != nil {
-		return fmt.Errorf("could not update friend link with id %d: %w", link.ID, err)
+		return err
 	}
 
 	log.Printf("为 ID  %d 更新友链. 状态: %s, 时间: %d, is_died: %t", link.ID, link.Status, link.Times, link.IsDied)
@@ -186,13 +179,18 @@ func UpdateFriendLink(db *gorm.DB, link model.FriendWebsite, result model.CrawlR
 
 // CreateFriendLink inserts a single new friend link into the database.
 func CreateFriendLink(db *gorm.DB, link model.FriendWebsite) (int64, error) {
+	status := link.Status
+	if status == "" {
+		status = "pending"
+	}
+
 	newLink := model.FriendWebsite{
 		Name:           link.Name,
 		Link:           link.Link,
 		Avatar:         link.Avatar,
 		Info:           link.Info,
 		Email:          link.Email,
-		Status:         "pending",
+		Status:         status,
 		EnableRss:      link.EnableRss,
 		Snapshot:       link.Snapshot,
 		FriendLinkPage: link.FriendLinkPage,
@@ -200,7 +198,7 @@ func CreateFriendLink(db *gorm.DB, link model.FriendWebsite) (int64, error) {
 	}
 
 	if err := db.Create(&newLink).Error; err != nil {
-		return 0, fmt.Errorf("could not execute insert statement for friend link: %w", err)
+		return 0, err
 	}
 
 	log.Printf("[db][friend] 已插入新友链: %s，ID 为: %d", link.Name, newLink.ID)
@@ -213,12 +211,16 @@ func DeleteFriendLinkByID(db *gorm.DB, id uint) (model.FriendWebsite, error) {
 	var rowsDeleted int64
 	err := db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("id = ?", id).First(&deletedLink).Error; err != nil {
-			return fmt.Errorf("could not query friend link for deletion: %w", err)
+			return err
+		}
+
+		if err := DeleteRssDataByFriendLinkID(tx, int(id)); err != nil {
+			return err
 		}
 
 		res := tx.Delete(&deletedLink)
 		if res.Error != nil {
-			return fmt.Errorf("could not delete friend link: %w", res.Error)
+			return res.Error
 		}
 		rowsDeleted = res.RowsAffected
 		return nil
@@ -232,6 +234,32 @@ func DeleteFriendLinkByID(db *gorm.DB, id uint) (model.FriendWebsite, error) {
 	return deletedLink, nil
 }
 
+// DeleteFriendLinkByOwner deletes an owned friend link and all of its RSS data.
+// It returns gorm.ErrRecordNotFound when the id does not belong to the email.
+func DeleteFriendLinkByOwner(db *gorm.DB, id uint, email string) (model.FriendWebsite, error) {
+	var deletedLink model.FriendWebsite
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND email = ?", id, email).First(&deletedLink).Error; err != nil {
+			return err
+		}
+		if err := DeleteRssDataByFriendLinkID(tx, int(id)); err != nil {
+			return err
+		}
+		result := tx.Where("id = ? AND email = ?", id, email).Delete(&model.FriendWebsite{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return model.FriendWebsite{}, err
+	}
+	return deletedLink, nil
+}
+
 // UpdateFriendLinkByID updates a friend link by its ID and handles cascading deletes for RSS data if necessary.
 func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (int64, error) {
 	if len(req.Data) == 0 {
@@ -240,18 +268,19 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 
 	// Whitelist of updatable columns
 	updatableColumns := map[string]bool{
-		"website_name":     true,
-		"website_url":      true,
-		"website_icon_url": true,
-		"description":      true,
-		"email":            true,
-		"times":            true,
-		"status":           true,
-		"enable_rss":       true,
-		"is_died":          true,
-		"snapshot":         true,
-		"friend_link_page": true,
-		"feed":             true,
+		"website_name":      true,
+		"website_url":       true,
+		"website_icon_url":  true,
+		"description":       true,
+		"email":             true,
+		"times":             true,
+		"status":            true,
+		"enable_rss":         true,
+		"is_died":            true,
+		"skip_health_check":  true,
+		"snapshot":           true,
+		"friend_link_page":   true,
+		"feed":               true,
 	}
 
 	updates := map[string]interface{}{}
@@ -290,7 +319,7 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		// Perform the update
 		result := tx.Model(&model.FriendWebsite{}).Where("id = ?", id).Updates(updates)
 		if result.Error != nil {
-			return fmt.Errorf("could not execute update for friend link id %d: %w", id, result.Error)
+			return result.Error
 		}
 		rowsAffected = result.RowsAffected
 		return nil
@@ -304,11 +333,72 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 	return rowsAffected, nil
 }
 
+// UpdateFriendLinkByOwner updates owner-editable profile fields for a friend link.
+// Ownership is included in the update predicate. Disabling RSS removes related data.
+func UpdateFriendLinkByOwner(db *gorm.DB, id uint, email string, req model.EditFriendLinkReq) (int64, error) {
+	if len(req.Data) == 0 {
+		return 0, fmt.Errorf("no data provided for update")
+	}
+
+	allowed := map[string]bool{
+		"website_name":     true,
+		"website_url":      true,
+		"website_icon_url": true,
+		"description":      true,
+		"enable_rss":       true,
+	}
+	updates := make(map[string]interface{}, len(req.Data))
+	for column, value := range req.Data {
+		if !allowed[column] {
+			return 0, fmt.Errorf("field %q cannot be updated by owner", column)
+		}
+		if !req.Opt.OverwriteIfBlank {
+			if text, ok := value.(string); ok && text == "" {
+				continue
+			}
+		}
+		updates[column] = value
+	}
+	if len(updates) == 0 {
+		return 0, fmt.Errorf("no data provided for update")
+	}
+
+	enableRSS, changesRSS := updates["enable_rss"].(bool)
+	disableRSS := changesRSS && !enableRSS
+
+	var rowsAffected int64
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := tx.Model(&model.FriendWebsite{}).
+			Where("id = ? AND email = ?", id, email).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if disableRSS {
+			if err := DeleteRssDataByFriendLinkID(tx, int(id)); err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&model.FriendWebsite{}).
+			Where("id = ? AND email = ?", id, email).
+			Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		rowsAffected = result.RowsAffected
+		return nil
+	})
+	return rowsAffected, err
+}
+
 // FriendLinkExists checks if a friend link with the given ID exists.
 func FriendLinkExists(db *gorm.DB, id int) (bool, error) {
 	var count int64
 	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", id).Count(&count).Error; err != nil {
-		return false, fmt.Errorf("could not check for existing friend_link: %w", err)
+		return false, err
 	}
 	return count > 0, nil
 }

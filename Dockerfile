@@ -44,4 +44,6 @@ ENV LISTEN_ADDRESS=0.0.0.0
 
 EXPOSE 10024
 
+VOLUME ["/app/data"]
+
 ENTRYPOINT ["/app/blog-api"]

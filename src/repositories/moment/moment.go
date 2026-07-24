@@ -25,7 +25,7 @@ func QueryMoments(db *gorm.DB, page, pageSize int, status string) ([]model.Momen
 		query = query.Offset(offset).Limit(pageSize)
 	}
 
-	orderExpr := "CASE WHEN pinned_order > 0 THEN 0 ELSE 1 END, pinned_order ASC, id DESC"
+	orderExpr := "CASE WHEN pinned_order > 0 THEN 0 ELSE 1 END, pinned_order ASC, created_at DESC, id DESC"
 	if err := query.Order(orderExpr).Find(&moments).Error; err != nil {
 		return nil, 0, err
 	}
@@ -39,7 +39,10 @@ func GetMediaForMoments(db *gorm.DB, momentIDs []int) ([]model.MomentMedia, erro
 	if len(momentIDs) == 0 {
 		return media, nil
 	}
-	if err := db.Where("moment_id IN ? AND is_deleted = 0", momentIDs).Find(&media).Error; err != nil {
+	if err := db.Where("moment_id IN ? AND is_deleted = 0", momentIDs).
+		Order("moment_id ASC").
+		Order("id ASC").
+		Find(&media).Error; err != nil {
 		return nil, err
 	}
 
@@ -78,10 +81,13 @@ func UpdateMoment(db *gorm.DB, id int, updates map[string]interface{}) error {
 	}
 
 	result := db.Model(&model.Moment{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // GetMomentByID retrieves a moment by ID.
@@ -96,17 +102,25 @@ func GetMomentByID(db *gorm.DB, id int) (*model.Moment, error) {
 // DeleteMomentByChannelMessage deletes a moment using channel_id and message_id.
 func DeleteMomentByChannelMessage(db *gorm.DB, channelID, messageID int64) error {
 	result := db.Where("channel_id = ? AND message_id = ?", channelID, messageID).Delete(&model.Moment{})
+	if result.Error != nil {
+		return result.Error
+	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	return result.Error
+	return nil
 }
 
 // MomentExistsByChannelMessage checks if a moment already exists for a channel/message pair.
 func MomentExistsByChannelMessage(db *gorm.DB, channelID, messageID int64) (bool, error) {
-	var count int64
-	if err := db.Model(&model.Moment{}).Where("channel_id = ? AND message_id = ?", channelID, messageID).Count(&count).Error; err != nil {
+	var id int
+	err := db.Model(&model.Moment{}).
+		Select("id").
+		Where("channel_id = ? AND message_id = ?", channelID, messageID).
+		Limit(1).
+		Scan(&id).Error
+	if err != nil {
 		return false, err
 	}
-	return count > 0, nil
+	return id > 0, nil
 }

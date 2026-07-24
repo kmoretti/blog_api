@@ -1,7 +1,11 @@
 .git
+.github
+.agents
+.codex
 .env
 .env.*
 data
+release
 web/node_modules
 web/dist
 web/.cache
@@ -34,3 +38,4 @@ coverage
 *.sqlite3-shm
 *.sqlite3-wal
 *.sqlite3-journal
+blog_api

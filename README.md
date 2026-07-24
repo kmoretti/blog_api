@@ -899,6 +899,12 @@ curl -X POST http://localhost:10024/api/action/resource/oss \
 docker compose logs --tail=200 blog-api
 ```
 
+- 邮箱友链自助管理（邮箱 token）：
+  - `GET /api/public/friend/self`：分页查询当前邮箱名下的友链
+  - `POST /api/public/friend`：新增友链
+  - `PUT /api/public/friend/:id`：修改自己的友链资料
+  - `DELETE /api/public/friend/:id`：删除自己的友链
+
 ## 目录结构（简版）
 
 ```text

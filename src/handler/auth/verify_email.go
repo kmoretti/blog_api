@@ -1,7 +1,6 @@
 package authHandler
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,7 +11,6 @@ import (
 	"blog_api/src/service"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // SendEmailCode handles POST /api/verify/email request.
@@ -39,23 +37,25 @@ func (h *VerifyHandler) SendEmailCode(c *gin.Context) {
 			return
 		}
 
-		var friendLink *model.FriendLinkDTO
+		friendLinks := make([]model.FriendLinkDTO, 0)
 		if h.DB != nil {
-			link, err := friendsRepositories.GetFriendLinkByEmail(h.DB, req.Email)
-			if err == nil {
-				dto := toPublicFriendLinkDTO(link)
-				friendLink = &dto
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			result, err := friendsRepositories.QueryFriendLinks(h.DB, model.FriendLinkQueryOptions{
+				Email: req.Email,
+			})
+			if err != nil {
 				c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve friend link"))
 				return
+			}
+			for _, link := range result.Links {
+				friendLinks = append(friendLinks, toPublicFriendLinkDTO(link))
 			}
 		}
 
 		c.JSON(http.StatusOK, model.NewSuccessResponse(map[string]interface{}{
-			"token":       token,
-			"expires_at":  expiresAt,
-			"expires_in":  service.EmailTokenTTLSeconds(),
-			"friend_link": friendLink,
+			"token":        token,
+			"expires_at":   expiresAt,
+			"expires_in":   service.EmailTokenTTLSeconds(),
+			"friend_links": friendLinks,
 		}))
 		return
 	}

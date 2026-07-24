@@ -75,14 +75,13 @@ func ParseRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
 			// If PublishedParsed is nil, use UpdatedParsed
 			publishedTime = item.UpdatedParsed
 			if publishedTime == nil {
-				log.Printf("跳过没有发布或更新时间的文章: %s", item.Title)
 				continue
 			}
 		}
 
-		time := publishedTime.Unix()
-		if time < 0 {
-			time = 0
+		publishedUnix := publishedTime.Unix()
+		if publishedUnix < 0 {
+			publishedUnix = 0
 		}
 
 		author := ""
@@ -118,7 +117,7 @@ func ParseRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
 			Link:        item.Link,
 			Description: p.Sanitize(item.Description),
 			Author:      author,
-			Time:        time,
+			Time:        publishedUnix,
 		}
 
 		err := friendsRepositories.InsertRssPost(db, post)
@@ -126,6 +125,8 @@ func ParseRssFeed(db *gorm.DB, friendRssID int, rssURL string) {
 			log.Printf("插入文章 '%s' 时出错: %v", item.Title, err)
 		}
 	}
+
+	log.Printf("RSS %s 共检查 %d 篇文章", rssURL, len(feed.Items))
 }
 
 func updateRssParseState(db *gorm.DB, friendRssID int, success bool) {

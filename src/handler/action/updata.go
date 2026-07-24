@@ -32,22 +32,14 @@ func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 	if authType, ok := c.Get("auth_type"); ok && authType == "email" {
 		authEmail, _ := c.Get("auth_email")
 		email, _ := authEmail.(string)
-		if req.Email == "" {
-			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "email is required"))
-			return
-		}
-		if email == "" || req.Email != email {
+		if email == "" || (req.Email != "" && req.Email != email) {
 			c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "email does not match the token"))
 			return
 		}
-		if _, err := friendsRepositories.GetFriendLinkByEmail(h.DB, req.Email); err == nil {
-			c.JSON(http.StatusConflict, model.NewErrorResponse(409, "friend link already exists for this email"))
-			return
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			log.Printf("[handler][updata][ERR] 查询友情链接失败: %v", err)
-			c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to validate friend link"))
-			return
-		}
+		req.Email = email
+		req.Status = "pending"
+	} else {
+		req.Status = "survival"
 	}
 
 	// Insert into database
@@ -59,6 +51,55 @@ func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"id": id}))
+}
+
+// DeleteOwnedFriendLink handles deletion by an email-authenticated owner.
+func (h *UpdataHandler) DeleteOwnedFriendLink(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid friend link ID"))
+		return
+	}
+	authEmail, _ := c.Get("auth_email")
+	email, _ := authEmail.(string)
+	if email == "" {
+		c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "email token is invalid"))
+		return
+	}
+
+	link, err := friendsRepositories.GetFriendLinkByID(h.DB, int(id))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link not found"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve friend link"))
+		return
+	}
+	if link.Email != email {
+		c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "friend link does not belong to this email"))
+		return
+	}
+
+	deleted, err := friendsRepositories.DeleteFriendLinkByOwner(h.DB, uint(id), email)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "friend link ownership changed"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to delete friend link"))
+		return
+	}
+	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"deleted_link": gin.H{
+		"id":          deleted.ID,
+		"name":        deleted.Name,
+		"link":        deleted.Link,
+		"avatar":      deleted.Avatar,
+		"description": deleted.Info,
+		"status":      deleted.Status,
+		"enable_rss":  deleted.EnableRss,
+		"updated_at":  deleted.UpdatedAt,
+	}}))
 }
 
 // DeleteFriendLink handles DELETE /api/action/friend/:id request
@@ -103,9 +144,18 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 	log.Printf("[handler][updata] Received friend link edit data for ID %d: %+v", id, req)
 
 	if authType, ok := c.Get("auth_type"); ok && authType == "email" {
-		if _, exists := req.Data["email"]; exists {
-			c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "email cannot be updated with this token"))
-			return
+		ownerFields := map[string]bool{
+			"website_name":     true,
+			"website_url":      true,
+			"website_icon_url": true,
+			"description":      true,
+			"enable_rss":       true,
+		}
+		for field := range req.Data {
+			if !ownerFields[field] {
+				c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "field cannot be updated with this token: "+field))
+				return
+			}
 		}
 		authEmail, _ := c.Get("auth_email")
 		email, _ := authEmail.(string)
@@ -127,6 +177,25 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 			c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "email does not match the token"))
 			return
 		}
+
+		rowsAffected, err := friendsRepositories.UpdateFriendLinkByOwner(h.DB, uint(id), email, req)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "friend link ownership changed"))
+				return
+			}
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, err.Error()))
+			return
+		}
+		c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))
+		return
+	}
+
+	if value, exists := req.Data["skip_health_check"]; exists {
+		if _, ok := value.(bool); !ok {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "skip_health_check must be a boolean"))
+			return
+		}
 	}
 
 	rowsAffected, err := friendsRepositories.UpdateFriendLinkByID(h.DB, uint(id), req)
@@ -140,14 +209,6 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 		log.Printf("[handler][updata] No friend link found with ID %d or no fields to update", id)
 		c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "no friend link found with the given ID or no fields needed update"))
 		return
-	}
-
-	if authType, ok := c.Get("auth_type"); ok && authType == "email" {
-		if err := friendsRepositories.DeleteRssDataByFriendLinkID(h.DB, int(id)); err != nil {
-			log.Printf("[handler][updata][ERR] 删除 RSS 失败: %v", err)
-			c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to delete rss data"))
-			return
-		}
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))

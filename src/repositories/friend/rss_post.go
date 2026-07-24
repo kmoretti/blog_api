@@ -2,25 +2,23 @@ package friendsRepositories
 
 import (
 	"blog_api/src/model"
-	"fmt"
 	"log"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-// InsertRssPost inserts a new post into the database, avoiding duplicates.
+// InsertRssPost inserts a post unless another post already owns the same link.
 func InsertRssPost(db *gorm.DB, post *model.RssPost) error {
 	result := db.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "link"}},
 		DoNothing: true,
 	}).Create(post)
 	if result.Error != nil {
-		return fmt.Errorf("could not insert post: %w", result.Error)
+		return result.Error
 	}
 
 	if result.RowsAffected == 0 {
-		log.Printf("链接为 %s 的文章已存在，跳过", post.Link)
 		return nil
 	}
 
@@ -42,7 +40,7 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 	}
 
 	if err := baseTx.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("could not query total posts count: %w", err)
+		return nil, 0, err
 	}
 
 	dataTx := baseTx.Select("p.id, p.rss_id, p.title, p.link, p.description, p.author, p.time")
@@ -51,8 +49,8 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 		dataTx = dataTx.Limit(query.PageSize).Offset(offset)
 	}
 
-	if err := dataTx.Order("p.time DESC").Scan(&posts).Error; err != nil {
-		return nil, 0, fmt.Errorf("could not query posts: %w", err)
+	if err := dataTx.Order("p.time DESC").Order("p.id DESC").Scan(&posts).Error; err != nil {
+		return nil, 0, err
 	}
 	for i := range posts {
 		if posts[i].Time < 0 {

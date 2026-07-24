@@ -67,3 +67,14 @@ export const deleteFriendLink = (id: number): Promise<ApiResponse> => {
     method: 'delete'
   })
 }
+
+
+/**
+ * 手动重新巡查单条友链
+ */
+export const recheckFriendLink = (id: number): Promise<ApiResponse> => {
+  return request({
+    url: `/action/friend/${id}/recheck`,
+    method: 'post'
+  })
+}

@@ -3,7 +3,9 @@ package handler
 import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
+	crawlerService "blog_api/src/service/crawler"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -38,6 +40,8 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 			dto.Email = link.Email
 			dto.Times = link.Times
 			dto.IsDied = link.IsDied
+			skipHealthCheck := link.SkipHealthCheck
+			dto.SkipHealthCheck = &skipHealthCheck
 		}
 		dtoLinks = append(dtoLinks, dto)
 	}
@@ -62,12 +66,14 @@ func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkD
 		dto.Email = link.Email
 		dto.Times = link.Times
 		dto.IsDied = link.IsDied
+		skipHealthCheck := link.SkipHealthCheck
+		dto.SkipHealthCheck = &skipHealthCheck
 	}
 	return dto
 }
 
 // getFriendLinks is a helper function to get friend links with common logic.
-func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool) {
+func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool, email string) {
 	// Parse query parameters
 	status := c.Query("status")
 	search := c.Query("search")
@@ -120,6 +126,7 @@ func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool) {
 	opts := model.FriendLinkQueryOptions{
 		Status: status,
 		Search: search,
+		Email:  email,
 		Offset: offset,
 		Limit:  pageSize,
 		IsDied: isDied,
@@ -167,7 +174,7 @@ func (h *FriendLinkHandler) getFriendLinkByID(c *gin.Context, isPrivate bool) {
 
 // GetAllFriendLinks handles GET /api/friend/ request
 func (h *FriendLinkHandler) GetAllFriendLinks(c *gin.Context) {
-	h.getFriendLinks(c, false)
+	h.getFriendLinks(c, false, "")
 }
 
 // GetFriendLinkByID handles GET /api/public/friend/:id request
@@ -190,27 +197,60 @@ func (h *FriendLinkHandler) GetFriendLinkByEmailToken(c *gin.Context) {
 		return
 	}
 
-	link, err := friendsRepositories.GetFriendLinkByEmail(h.DB, email)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link not found"))
-			return
-		}
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve friend link"))
-		return
-	}
-
-	dto := toFriendLinkDTO(link, false)
-	c.JSON(http.StatusOK, model.NewSuccessResponse(dto))
+	h.getFriendLinks(c, false, email)
 }
 
 // GetFullFriendLinks handles GET /api/action/friend/ request (authenticated)
 // It returns the full friend link data, including sensitive fields.
 func (h *FriendLinkHandler) GetFullFriendLinks(c *gin.Context) {
-	h.getFriendLinks(c, true)
+	h.getFriendLinks(c, true, "")
 }
 
 // GetFullFriendLinkByID handles GET /api/action/friend/:id request (authenticated)
 func (h *FriendLinkHandler) GetFullFriendLinkByID(c *gin.Context) {
 	h.getFriendLinkByID(c, true)
+}
+
+// RecheckFriendLink handles POST /api/action/friend/:id/recheck.
+// It performs one inspection even when scheduled health checks are disabled.
+func (h *FriendLinkHandler) RecheckFriendLink(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "invalid friend link ID"))
+		return
+	}
+
+	link, err := friendsRepositories.GetFriendLinkByID(h.DB, id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, model.NewErrorResponse(http.StatusNotFound, "friend link not found"))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "failed to retrieve friend link"))
+		return
+	}
+
+	result := crawlerService.CrawlWebsite(c.Request.Context(), link.Link)
+	if c.Request.Context().Err() != nil {
+		return
+	}
+	if err := friendsRepositories.UpdateFriendLink(h.DB, link, result); err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "failed to update friend link inspection"))
+		return
+	}
+
+	if link.EnableRss {
+		for _, rssURL := range result.RssURLs {
+			name, err := crawlerService.GetRssTitle(rssURL)
+			if err != nil {
+				log.Printf("[handler][friend] failed to get RSS title %s: %v", rssURL, err)
+				continue
+			}
+			if _, err := friendsRepositories.CreateFriendRssFeeds(h.DB, link.ID, rssURL, name); err != nil {
+				log.Printf("[handler][friend] failed to add RSS feed %s for friend link %d: %v", rssURL, link.ID, err)
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, model.NewSuccessResponse(nil))
 }

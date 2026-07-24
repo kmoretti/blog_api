@@ -40,10 +40,10 @@ func scheduleFromNextMidnight(jobName string, interval time.Duration, job func()
 func RunFriendLinkCrawlerJob(db *gorm.DB) {
 	log.Println("[Cron] 正在运行友链爬取任务（并发模式）...")
 	isDied := false
+	skipHealthCheck := false
 	opts := model.FriendLinkQueryOptions{
-		Statuses: []string{"ignored"},
-		NotIn:    true,
-		IsDied:   &isDied,
+		IsDied:          &isDied,
+		SkipHealthCheck: &skipHealthCheck,
 	}
 	resp, err := friendsRepositories.QueryFriendLinks(db, opts)
 	if err != nil {
@@ -91,8 +91,10 @@ func RunFriendLinkCrawlerJob(db *gorm.DB) {
 func RunDiedFriendLinkCheckJob(db *gorm.DB) {
 	log.Println("[Cron] 正在运行失效友链检查任务（并发模式）...")
 	isDied := true
+	skipHealthCheck := false
 	opts := model.FriendLinkQueryOptions{
-		IsDied: &isDied,
+		IsDied:          &isDied,
+		SkipHealthCheck: &skipHealthCheck,
 	}
 	resp, err := friendsRepositories.QueryFriendLinks(db, opts)
 	if err != nil {

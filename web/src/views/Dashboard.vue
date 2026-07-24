@@ -36,7 +36,25 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { statsApi } from '@/api/stats'
 import type { SystemStatus } from '@/model/stats'
-import * as echarts from 'echarts'
+import * as echarts from 'echarts/core'
+import { LineChart, PieChart } from 'echarts/charts'
+import {
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([
+  LineChart,
+  PieChart,
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+  CanvasRenderer
+])
 
 const username = ref('')
 const pieChart = ref<HTMLElement | null>(null)
@@ -201,30 +219,36 @@ const initCharts = () => {
 .dashboard-container {
   padding: 20px;
 }
+
 .welcome-card,
 .chart-card {
   max-width: 1200px;
   margin: 0 auto 20px auto;
 }
+
 .welcome-card h3 {
   margin: 0 0 16px 0;
   color: var(--el-text-color-primary);
   font-size: 24px;
 }
+
 .welcome-card p {
   color: var(--el-text-color-regular);
   margin: 0 0 16px 0;
 }
+
 .info-section h4 {
   color: var(--el-text-color-primary);
   margin: 0 0 12px 0;
 }
+
 .info-section ul {
   margin: 0;
   padding-left: 20px;
   color: var(--el-text-color-regular);
   line-height: 1.8;
 }
+
 .stats-section {
   margin-top: 16px;
 }

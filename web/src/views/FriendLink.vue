@@ -23,7 +23,6 @@
           <el-option label="待定" value="pending"></el-option>
           <el-option label="超时" value="timeout"></el-option>
           <el-option label="错误" value="error"></el-option>
-          <el-option label="忽略" value="ignored"></el-option>
         </el-select>
         <el-input v-model="searchQuery" placeholder="搜索友链" clearable @input="handleSearch"
           style="width: 200px; margin-right: 10px" />
@@ -56,6 +55,11 @@
                 {{ formatDate(row.updated_at) }}
               </template>
             </el-table-column>
+            <el-table-column label="不巡查" width="100">
+              <template #default="{ row }">
+                <el-switch :model-value="row.skip_health_check" @change="handleHealthCheckToggle(row)" />
+              </template>
+            </el-table-column>
             <el-table-column label="订阅 RSS" width="100">
               <template #default="{ row }">
                 <el-switch :model-value="row.enable_rss" @change="handleRssToggle(row)" />
@@ -73,8 +77,14 @@
                 <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
+                <el-button type="success" link :icon="Refresh"
+                  :loading="recheckingId === row.id"
+                  :disabled="recheckingId !== null && recheckingId !== row.id"
+                  @click="handleRecheck(row.id)">
+                  重新巡查
+                </el-button>
                 <el-button type="primary" link :icon="Edit" @click="openFormDialog(row)">
                   编辑
                 </el-button>
@@ -135,7 +145,6 @@
             <el-option label="待定" value="pending"></el-option>
             <el-option label="超时" value="timeout"></el-option>
             <el-option label="错误" value="error"></el-option>
-            <el-option label="忽略" value="ignored"></el-option>
           </el-select>
         </el-form-item>
       </el-form>
@@ -150,13 +159,14 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Edit } from '@element-plus/icons-vue'
+import { Plus, Delete, Edit, Refresh } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
   getFriendLinks,
   createFriendLink,
   updateFriendLink,
-  deleteFriendLink
+  deleteFriendLink,
+  recheckFriendLink
 } from '@/api/friendLink'
 import type { FriendLink } from '@/model/friendLink'
 import { usePagination } from '@/utils/pagination'
@@ -165,6 +175,7 @@ import { formatDate } from '@/utils/date'
 // Reactive State
 const friendLinks = ref<FriendLink[]>([])
 const loading = ref(false)
+const recheckingId = ref<number | null>(null)
 const filterStatus = ref('')
 const filterIsDied = ref<boolean | null>(null)
 const searchQuery = ref('')
@@ -179,8 +190,9 @@ const form = reactive<{
   description: string
   email: string
   times: number
-  status: 'survival' | 'timeout' | 'error' | 'pending' | 'ignored'
+  status: 'survival' | 'timeout' | 'error' | 'pending'
   enable_rss: boolean
+  skip_health_check: boolean
   snapshot: string
   friend_link_page: string
   feed: string
@@ -193,8 +205,9 @@ const form = reactive<{
   description: '',
   email: '',
   times: 0,
-  status: 'pending',
+  status: 'survival',
   enable_rss: true,
+  skip_health_check: false,
   snapshot: '',
   friend_link_page: '',
   feed: '',
@@ -271,8 +284,9 @@ const resetForm = () => {
     description: '',
     email: '',
     times: 0,
-    status: 'pending',
+    status: 'survival',
     enable_rss: true,
+    skip_health_check: false,
     snapshot: '',
     friend_link_page: '',
     feed: '',
@@ -328,13 +342,27 @@ const handleDelete = (id: number) => {
   })
 }
 
+const handleRecheck = async (id: number) => {
+  if (recheckingId.value !== null) return
+
+  recheckingId.value = id
+  try {
+    await recheckFriendLink(id)
+    ElMessage.success('巡查完成')
+    await fetchFriendLinks()
+  } catch {
+    // The response interceptor reports request failures.
+  } finally {
+    recheckingId.value = null
+  }
+}
+
 // UI Helpers
 const statusTagType = (status: string) => {
   switch (status) {
     case 'survival':
       return 'success'
     case 'pending':
-    case 'ignored':
       return 'info'
     case 'timeout':
       return 'warning'
@@ -344,6 +372,21 @@ const statusTagType = (status: string) => {
       return 'info'
   }
 }
+const handleHealthCheckToggle = async (link: FriendLink) => {
+  const originalValue = link.skip_health_check
+  const newValue = !originalValue
+
+  link.skip_health_check = newValue
+  try {
+    await updateFriendLink(link.id, { data: { skip_health_check: newValue } })
+    ElMessage.success(`已${newValue ? '停止' : '恢复'}巡查`)
+    fetchFriendLinks()
+  } catch (error) {
+    link.skip_health_check = originalValue
+    ElMessage.error('更新巡查状态失败')
+  }
+}
+
 const handleRssToggle = async (link: FriendLink) => {
   const originalValue = link.enable_rss
   const newValue = !originalValue

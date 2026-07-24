@@ -28,7 +28,12 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	RssHandler := &handlerAction.FriendRssHandler{DB: db}
 	authHandlerInstance := authHandler.NewAuthHandler()
 	verifyHandler := &authHandler.VerifyHandler{DB: db}
-	statusHandler := &handler.StatusHandler{DB: db, StartTime: startTime}
+	statusHandler := &handler.StatusHandler{
+		DB:           db,
+		StartTime:    startTime,
+		DatabasePath: cfg.Data.Database.Path,
+		DataPath:     "data",
+	}
 	imageHandler := &handlerAction.ImageHandler{DB: db}
 	resourceHandler := handlerAction.NewResourceHandler(cfg, ossService)
 	imagePublicHandler := handler.NewImagePublicHandler(db)
@@ -65,6 +70,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			publicGroup.GET("/friend/:id", friendLinkHandler.GetFriendLinkByID)
 			publicGroup.POST("/friend", middleware.FriendLinkAuth(), updataHandler.CreateFriendLink)
 			publicGroup.PUT("/friend/:id", middleware.FriendLinkAuth(), updataHandler.EditFriendLink)
+			publicGroup.DELETE("/friend/:id", middleware.FriendLinkAuth(), updataHandler.DeleteOwnedFriendLink)
 			publicGroup.GET("/rss/", rssPostHandler.GetRssPosts)
 			publicGroup.GET("/image/*id", imagePublicHandler.GetImage)
 			publicGroup.GET("/moments/", momentHandler.GetMoments)
@@ -83,6 +89,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 				friendActionGroup.POST("", updataHandler.CreateFriendLink)
 				friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
 				friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
+				friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
 			}
 			rssActionGroup := actionGroup.Group("/rss")
 			{

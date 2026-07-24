@@ -7,8 +7,9 @@ export interface FriendLink {
   link: string
   avatar: string
   description: string
-  status: 'survival' | 'timeout' | 'error' | 'pending' | 'ignored'
+  status: 'survival' | 'timeout' | 'error' | 'pending'
   enable_rss: boolean
+  skip_health_check: boolean
   is_died?: boolean
   email?: string
   times?: number
