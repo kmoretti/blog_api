@@ -63,6 +63,9 @@ func GetPosts(db *gorm.DB, query *model.PostQuery) ([]model.RssPost, int, error)
 	if err := dataTx.Order("p.time DESC").Order("p.id DESC").Scan(&posts).Error; err != nil {
 		return nil, 0, err
 	}
+	if posts == nil {
+		posts = []model.RssPost{}
+	}
 	for i := range posts {
 		if posts[i].Time < 0 {
 			posts[i].Time = 0
