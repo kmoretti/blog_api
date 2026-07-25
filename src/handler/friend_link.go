@@ -7,7 +7,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/mail"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -106,17 +108,21 @@ func (h *FriendLinkHandler) getFriendLinks(c *gin.Context, isPrivate bool, email
 	}
 
 	// Validate status parameter if provided
-	if status != "" {
-		validStatuses := map[string]bool{
-			"survival": true,
-			"timeout":  true,
-			"error":    true,
-			"pending":  true,
-		}
-		if !validStatuses[status] {
-			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid status parameter"))
-			return
-		}
+	validStatuses := map[string]bool{
+		"survival": true,
+		"timeout":  true,
+		"error":    true,
+		"pending":  true,
+		"rejected": true,
+	}
+	if status != "" && !validStatuses[status] {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid status parameter"))
+		return
+	}
+
+	// Public friend list should only show approved links by default.
+	if !isPrivate && status == "" {
+		status = "survival"
 	}
 
 	// Calculate offset
@@ -209,6 +215,204 @@ func (h *FriendLinkHandler) GetFullFriendLinks(c *gin.Context) {
 // GetFullFriendLinkByID handles GET /api/action/friend/:id request (authenticated)
 func (h *FriendLinkHandler) GetFullFriendLinkByID(c *gin.Context) {
 	h.getFriendLinkByID(c, true)
+}
+
+// ApplyFriendLink handles POST /api/public/friend/apply.
+// It creates a pending friend link submission from an anonymous visitor.
+func (h *FriendLinkHandler) ApplyFriendLink(c *gin.Context) {
+	var req model.FriendLinkApplyReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid request body"))
+		return
+	}
+
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" || strings.TrimSpace(req.Email) == "" {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "name, link, avatar and email are required"))
+		return
+	}
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
+		return
+	}
+
+	link := strings.TrimRight(req.Link, "/")
+	link = strings.TrimSpace(link)
+	if !strings.HasPrefix(link, "http://") && !strings.HasPrefix(link, "https://") {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "link must start with http:// or https://"))
+		return
+	}
+
+	submission := model.FriendWebsite{
+		Name:           req.Name,
+		Link:           link,
+		Avatar:         req.Avatar,
+		Info:           req.Description,
+		Email:          req.Email,
+		Status:         "pending",
+		EnableRss:      req.EnableRss,
+		Snapshot:       req.Snapshot,
+		FriendLinkPage: req.FriendLinkPage,
+		Feed:           req.Feed,
+	}
+
+	id, err := friendsRepositories.CreateFriendLink(h.DB, submission)
+	if err != nil {
+		log.Printf("[handler][friend][apply] failed to create application: %v", err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to submit friend link application"))
+		return
+	}
+
+	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, gin.H{
+		"id":      id,
+		"status":  "pending",
+		"message": "友链申请已提交，等待管理员审核",
+	}))
+}
+
+// UpdateApplyFriendLink handles POST /api/public/friend/update-apply.
+// It creates a pending update request. If an existing friend link with the
+// same email and original link is found, the new data is stored as a pending
+// update record linked to that friend link.
+func (h *FriendLinkHandler) UpdateApplyFriendLink(c *gin.Context) {
+	var req model.FriendLinkUpdateApplyReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid request body"))
+		return
+	}
+
+	originalLink := strings.TrimRight(strings.TrimSpace(req.OriginalURL), "/")
+	if originalLink == "" || strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" || strings.TrimSpace(req.Email) == "" {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "original_url, name, link, avatar and email are required"))
+		return
+	}
+
+	if _, err := mail.ParseAddress(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
+		return
+	}
+
+	newLink := strings.TrimRight(strings.TrimSpace(req.Link), "/")
+	if !strings.HasPrefix(newLink, "http://") && !strings.HasPrefix(newLink, "https://") {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "link must start with http:// or https://"))
+		return
+	}
+
+	existing, err := friendsRepositories.GetFriendLinkByLink(h.DB, originalLink)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("[handler][friend][update-apply] failed to query existing link: %v", err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to query existing friend link"))
+		return
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "未找到原友链记录，请检查原站点地址"))
+		return
+	}
+
+	if existing.Email != "" && existing.Email != req.Email {
+		c.JSON(http.StatusForbidden, model.NewErrorResponse(403, "邮箱与原友链登记邮箱不一致"))
+		return
+	}
+
+	// Store the update request as a new pending application. The admin can
+	// inspect the original ID and apply the changes through the existing panel.
+	submission := model.FriendWebsite{
+		Name:           req.Name,
+		Link:           newLink,
+		Avatar:         req.Avatar,
+		Info:           req.Description,
+		Email:          req.Email,
+		Status:         "pending",
+		EnableRss:      req.EnableRss,
+		Snapshot:       req.Snapshot,
+		FriendLinkPage: req.FriendLinkPage,
+		Feed:           req.Feed,
+	}
+
+	id, err := friendsRepositories.CreateFriendLink(h.DB, submission)
+	if err != nil {
+		log.Printf("[handler][friend][update-apply] failed to create update application: %v", err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to submit update application"))
+		return
+	}
+
+	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, gin.H{
+		"id":           id,
+		"original_id":  existing.ID,
+		"status":       "pending",
+		"message":      "友链更新申请已提交，等待管理员审核",
+	}))
+}
+
+// GetFriendSubmissions handles GET /api/public/friend/submissions.
+// It returns a public list of pending/approved/rejected friend link applications
+// without exposing sensitive fields.
+func (h *FriendLinkHandler) GetFriendSubmissions(c *gin.Context) {
+	status := c.Query("status")
+	search := c.Query("search")
+
+	pageStr := c.DefaultQuery("page", "1")
+	page, err := strconv.Atoi(pageStr)
+	if err != nil || page < 1 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid page parameter"))
+		return
+	}
+
+	pageSizeStr := c.DefaultQuery("page_size", "12")
+	pageSize, err := strconv.Atoi(pageSizeStr)
+	if err != nil || pageSize < 1 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid page_size parameter"))
+		return
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	// Validate status parameter if provided
+	validStatuses := map[string]bool{
+		"survival": true,
+		"timeout":  true,
+		"error":    true,
+		"pending":  true,
+		"rejected": true,
+	}
+	if status != "" && !validStatuses[status] {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid status parameter"))
+		return
+	}
+
+	offset := (page - 1) * pageSize
+	opts := model.FriendLinkQueryOptions{
+		Status: status,
+		Search: search,
+		Offset: offset,
+		Limit:  pageSize,
+	}
+
+	resp, err := friendsRepositories.QueryFriendLinks(h.DB, opts)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve submissions"))
+		return
+	}
+
+	submissions := make([]model.FriendLinkSubmission, 0, len(resp.Links))
+	for _, link := range resp.Links {
+		submissions = append(submissions, model.FriendLinkSubmission{
+			ID:          link.ID,
+			Name:        link.Name,
+			Description: link.Info,
+			Status:      link.Status,
+			UpdatedAt:   link.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{
+		"submissions": submissions,
+		"total":       resp.Count,
+		"page":        page,
+		"page_size":   pageSize,
+	}))
 }
 
 // RecheckFriendLink handles POST /api/action/friend/:id/recheck.

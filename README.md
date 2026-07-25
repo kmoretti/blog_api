@@ -427,35 +427,6 @@ docker build --platform linux/amd64 -t blog-api:local .
 
 本项目当前的本地 Docker 构建和 Compose 运行验证不在本文档编写范围内，请以你的服务器环境实际执行结果为准。
 
-## GitHub 仓库卡片与 API Token
-
-动态中的 GitHub 仓库卡片会通过后端代理请求 GitHub 仓库元数据，前端不会接触 GitHub Token。代理接口为：
-
-```text
-GET /api/public/github/repository/:owner/:repo
-```
-
-如果未配置 Token，卡片仍可显示仓库基础信息，但 GitHub API 使用未认证请求，容易受到较低的速率限制。建议在服务器 `.env` 中配置只读 Token：
-
-```dotenv
-GH_TOKEN="github_pat_xxxxxxxxxxxxxxxxxxxx"
-```
-
-Token 使用建议：
-
-- 使用 GitHub Fine-grained personal access token
-- 只授予访问所需公开仓库的最小读取权限
-- 不要将 Token 写入 `system_config.json`、前端变量、Dockerfile 或 Git 仓库
-- 不要将真实 Token 写入 `.env.example`
-- 当前 Compose 会通过 `env_file: ./.env` 将 Token 注入后端容器
-- 修改 Token 后重启容器使其生效：
-
-```bash
-docker compose restart blog-api
-```
-
-如果 GitHub API 请求失败，卡片会降级显示仓库路径，不会影响动态页面的其他内容。
-
 
 
 Docker 部署不需要执行以下步骤。只有在本地开发或修改前端时，才需要启动前端开发服务器：
@@ -532,8 +503,6 @@ https://blog-api.2005815.xyz
   "page_size": 20
 }
 ```
-
-GitHub 仓库代理接口直接透传 GitHub API 的 JSON 响应，不使用上面的统一响应包装。
 
 ### 认证方式
 
@@ -642,20 +611,11 @@ Authorization: Fingerprint <fingerprint-token>
 
 公开接口不需要管理员 JWT。
 
-#### 系统和 GitHub
+#### 系统
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/api/public/verify_conf` | 返回 Turnstile 是否启用及前端 Site Key |
-| `GET` | `/api/public/github/repository/:owner/:repo` | 获取 GitHub 仓库元数据 |
-
-GitHub 代理示例：
-
-```bash
-curl https://blog-api.2005815.xyz/api/public/github/repository/kmoretti/blog_api
-```
-
-`:owner` 和 `:repo` 只允许字母、数字、`.`、`_`、`-`，仓库路径支持可选的 `.git` 后缀。后端会从服务器 `.env` 的 `GH_TOKEN` 读取 GitHub Token，前端不会接触该密钥。
 
 #### 动态 Moments
 
@@ -703,16 +663,21 @@ curl -X POST http://localhost:10024/api/public/moments/1/reactions \
 | `GET` | `/api/public/friend/self` | 邮箱 Token | 查询当前邮箱对应的友链 |
 | `POST` | `/api/public/friend` | 邮箱 Token 或 JWT | 自助提交友链 |
 | `PUT` | `/api/public/friend/:id` | 邮箱 Token 或 JWT | 修改自己提交的友链 |
+| `POST` | `/api/public/friend/apply` | Turnstile（启用时） | 访客提交友链申请 |
+| `POST` | `/api/public/friend/update-apply` | Turnstile（启用时） | 访客提交友链更新申请 |
+| `GET` | `/api/public/friend/submissions` | 无 | 公开申请记录列表 |
 
 友链查询参数：
 
 ```text
-status       状态筛选
+status       状态筛选：survival / timeout / error / pending / rejected
 search       名称或链接搜索
 is_died      是否已失联
 page         页码，默认 1
 page_size    每页数量，默认 20，最大 1000
 ```
+
+公开友链列表（`GET /api/public/friend/`）在未指定 `status` 时默认只返回 `survival` 状态的友链，避免未审核或被拒绝的申请被访客看到。
 
 自助提交友链示例：
 
@@ -728,6 +693,111 @@ curl -X POST http://localhost:10024/api/public/friend \
     "email":"user@example.com",
     "enable_rss":true
   }'
+```
+
+##### 友链申请接口
+
+`/api/public/friend/apply` 面向匿名访客，数据写入 `friend_link` 表，默认状态为 `pending`。管理员可通过现有 `PUT /api/action/friend/:id` 接口将状态改为 `survival`（通过）或 `rejected`（拒绝），前端申请列表会同步展示对应审核结果。
+
+请求字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `name` | string | 是 | 站点名称 |
+| `link` | string | 是 | 站点地址，需以 `http://` 或 `https://` 开头 |
+| `avatar` | string | 是 | 头像/Logo URL |
+| `email` | string | 是 | 联系邮箱 |
+| `description` | string | 否 | 站点描述 |
+| `snapshot` | string | 否 | 站点截图 URL |
+| `friend_link_page` | string | 否 | 对方友链页面地址 |
+| `feed` | string | 否 | RSS 订阅地址 |
+| `enable_rss` | bool | 否 | 是否启用 RSS 抓取，默认 `false` |
+| `turnstile_token` | string | 条件 | Turnstile 启用时必填 |
+
+提交示例：
+
+```bash
+curl -X POST http://localhost:10024/api/public/friend/apply \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":"我的博客",
+    "link":"https://example.com",
+    "avatar":"https://example.com/avatar.png",
+    "email":"user@example.com",
+    "description":"技术博客",
+    "enable_rss":true,
+    "turnstile_token":"<turnstile-token>"
+  }'
+```
+
+成功响应：
+
+```json
+{
+  "code": 201,
+  "message": "success",
+  "data": {
+    "id": 42,
+    "status": "pending",
+    "message": "友链申请已提交，等待管理员审核"
+  }
+}
+```
+
+##### 友链更新申请接口
+
+`/api/public/friend/update-apply` 用于更新已有友链。后端会根据 `original_url` 查找原记录，并校验邮箱是否与原登记邮箱一致。
+
+请求字段：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `original_url` | string | 是 | 原站点地址 |
+| `name` | string | 是 | 新站点名称 |
+| `link` | string | 是 | 新站点地址 |
+| `avatar` | string | 是 | 新头像地址 |
+| `email` | string | 是 | 联系邮箱，需与原记录一致 |
+| `description` | string | 否 | 新站点描述 |
+| `snapshot` | string | 否 | 新站点截图 |
+| `friend_link_page` | string | 否 | 新友链页面 |
+| `feed` | string | 否 | 新 RSS 地址 |
+| `enable_rss` | bool | 否 | 是否启用 RSS 抓取 |
+| `turnstile_token` | string | 条件 | Turnstile 启用时必填 |
+
+##### 公开申请列表接口
+
+`/api/public/friend/submissions` 返回去敏后的申请记录，供前端展示审核状态。
+
+查询参数：
+
+```text
+status       状态筛选：pending / survival / rejected / timeout / error
+search       名称搜索
+page         页码，默认 1
+page_size    每页数量，默认 12，最大 100
+```
+
+响应示例：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "submissions": [
+      {
+        "id": 42,
+        "name": "我的博客",
+        "description": "技术博客",
+        "status": "pending",
+        "updated_at": 1699123456
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 12
+  }
+}
 ```
 
 #### RSS 与图片

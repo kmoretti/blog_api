@@ -97,3 +97,39 @@ type RssFetchResult struct {
 	CheckedItems  int `json:"checked_items"`
 	InsertedItems int `json:"inserted_items"`
 }
+
+// FriendLinkApplyReq is the public application form payload.
+type FriendLinkApplyReq struct {
+	Name           string `json:"name"`
+	Link           string `json:"link"`
+	Avatar         string `json:"avatar"`
+	Description    string `json:"description,omitempty"`
+	Email          string `json:"email"`
+	Snapshot       string `json:"snapshot,omitempty"`
+	FriendLinkPage string `json:"friend_link_page,omitempty"`
+	Feed           string `json:"feed,omitempty"`
+	EnableRss      bool   `json:"enable_rss"`
+}
+
+// FriendLinkUpdateApplyReq is the public update application form payload.
+type FriendLinkUpdateApplyReq struct {
+	OriginalURL    string `json:"original_url"`
+	Name           string `json:"name"`
+	Link           string `json:"link"`
+	Avatar         string `json:"avatar"`
+	Description    string `json:"description,omitempty"`
+	Email          string `json:"email"`
+	Snapshot       string `json:"snapshot,omitempty"`
+	FriendLinkPage string `json:"friend_link_page,omitempty"`
+	Feed           string `json:"feed,omitempty"`
+	EnableRss      bool   `json:"enable_rss"`
+}
+
+// FriendLinkSubmission is a public-safe view of an application record.
+type FriendLinkSubmission struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
