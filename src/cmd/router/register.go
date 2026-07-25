@@ -69,6 +69,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			publicGroup.PUT("/friend/:id", middleware.FriendLinkAuth(), updataHandler.EditFriendLink)
 			publicGroup.DELETE("/friend/:id", middleware.FriendLinkAuth(), updataHandler.DeleteOwnedFriendLink)
 			publicGroup.GET("/rss/", rssPostHandler.GetRssPosts)
+			publicGroup.POST("/rss/refresh", rssPostHandler.RefreshRssPosts)
 			publicGroup.GET("/image/*id", imagePublicHandler.GetImage)
 			publicGroup.GET("/moments/", momentHandler.GetMoments)
 			publicGroup.POST("/moments/:id/reactions", middleware.AntiBotAuth(), middleware.FingerprintAuth(), momentReactionHandler.AddReaction)
@@ -96,6 +97,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 				rssActionGroup.PUT("/:id", RssHandler.EditRss)
 				rssActionGroup.DELETE("/:id", RssHandler.DeleteFriendRss)
 				rssActionGroup.POST("/:id/fetch", RssHandler.FetchRss)
+				rssActionGroup.POST("/parse-all", RssHandler.ParseAllRss)
 			}
 			imageActionGroup := actionGroup.Group("/image")
 			{

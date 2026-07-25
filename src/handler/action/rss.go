@@ -4,6 +4,7 @@ import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
 	crawlerService "blog_api/src/service/crawler"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -240,6 +241,35 @@ func (h *FriendRssHandler) FetchRss(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(result))
+}
+
+// ParseAllRss triggers background parsing for all valid RSS feeds.
+func (h *FriendRssHandler) ParseAllRss(c *gin.Context) {
+	opts := model.FriendRssQueryOptions{Status: "valid"}
+	resp, err := friendsRepositories.QueryFriendRss(h.DB, opts)
+	if err != nil {
+		log.Printf("[handler][rss] failed to query valid rss feeds: %v", err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "获取 RSS 列表失败"))
+		return
+	}
+
+	if len(resp.Feeds) == 0 {
+		c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"message": "没有需要抓取的 RSS 源"}))
+		return
+	}
+
+	// Run parsing in background to avoid blocking the HTTP request.
+	go func(feeds []model.FriendRss) {
+		result := crawlerService.ParseRssFeedsConcurrently(context.Background(), h.DB, feeds)
+		if result.DatabaseFailures > 0 {
+			log.Printf("[handler][rss] background parse-all finished with %d database failures", result.DatabaseFailures)
+		}
+	}(resp.Feeds)
+
+	c.JSON(http.StatusAccepted, model.NewSuccessResponseWithCode(http.StatusAccepted, gin.H{
+		"message":  "已开始后台抓取 RSS",
+		"feed_count": len(resp.Feeds),
+	}))
 }
 
 // GetRss 处理 GET /api/action/rss 请求
