@@ -77,7 +77,7 @@ func (h *ImageHandler) CreateImage(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, model.NewSuccessResponse(image))
+	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, image))
 }
 
 // UpdateImage handles PUT /api/action/image/:id request

@@ -25,6 +25,25 @@ export interface RssPost {
   time: number
 }
 
+export interface CreateRssFeedPayload {
+  name: string
+  rss_url: string
+  friend_link_id: number
+}
+
+export interface UpdateRssFeedPayload {
+  name?: string
+  rss_url?: string
+  status?: string
+  is_died?: boolean
+  friend_link_id?: number
+}
+
+export interface RssFetchResult {
+  checked_items: number
+  inserted_items: number
+}
+
 /**
  * Generic interface for paginated API responses.
  */

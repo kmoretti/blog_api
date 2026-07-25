@@ -91,3 +91,9 @@ type QueryFriendRssResponse struct {
 	Feeds []FriendRss `json:"feeds"`
 	Total int64       `json:"total"`
 }
+
+// RssFetchResult summarizes one completed RSS fetch.
+type RssFetchResult struct {
+	CheckedItems  int `json:"checked_items"`
+	InsertedItems int `json:"inserted_items"`
+}

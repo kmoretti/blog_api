@@ -1,7 +1,14 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/model/response'
 
-import type { RssFeed, RssPost, PaginatedResponse } from '@/model/rss'
+import type {
+  CreateRssFeedPayload,
+  PaginatedResponse,
+  RssFeed,
+  RssFetchResult,
+  RssPost,
+  UpdateRssFeedPayload
+} from '@/model/rss'
 
 /**
  * Fetches the list of all RSS feeds.
@@ -77,6 +84,17 @@ export const deleteRssFeed = (ids: number[]): Promise<ApiResponse> => {
 }
 
 /**
+ * Deletes one persisted RSS article.
+ * Corresponds to DELETE /api/action/rss/posts/:id
+ */
+export const deleteRssPost = (id: number): Promise<ApiResponse<{ rows_affected: number }>> => {
+  return request({
+    url: `/action/rss/posts/${id}`,
+    method: 'delete'
+  })
+}
+
+/**
  * Updates an existing RSS feed.
  * Corresponds to PUT /api/action/rss
  * @param id - The ID of the RSS feed to update.
@@ -84,7 +102,7 @@ export const deleteRssFeed = (ids: number[]): Promise<ApiResponse> => {
  */
 export const updateRssFeed = (
   id: number,
-  data: { name?: string; rss_url?: string; status?: string; is_died?: boolean }
+  data: UpdateRssFeedPayload
 ): Promise<ApiResponse> => {
   return request({
     url: `/action/rss/${id}`,
@@ -98,19 +116,23 @@ export const updateRssFeed = (
 /**
  * Creates a new RSS feed.
  * Corresponds to POST /api/action/rss
- * @param name - The name of the RSS feed.
- * @param rss_url - The URL of the RSS feed to create.
+ * @param data - The RSS feed fields to create.
  */
-export const createRssFeed = (
-  name: string,
-  rss_url: string
-): Promise<ApiResponse> => {
+export const createRssFeed = (data: CreateRssFeedPayload): Promise<ApiResponse> => {
   return request({
     url: '/action/rss',
     method: 'post',
-    data: {
-      name,
-      rss_url
-    }
+    data
+  })
+}
+
+/**
+ * Fetches and persists articles from one RSS feed immediately.
+ */
+export const fetchRssFeed = (id: number): Promise<ApiResponse<RssFetchResult>> => {
+  return request({
+    url: `/action/rss/${id}/fetch`,
+    method: 'post',
+    timeout: 0
   })
 }

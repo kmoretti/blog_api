@@ -62,7 +62,7 @@ func (h *MediaHandler) CreateMedia(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, model.NewSuccessResponse(media))
+	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, media))
 }
 
 // DeleteMedia handles DELETE /api/action/moments/media/:id request

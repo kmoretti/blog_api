@@ -58,6 +58,13 @@ func QueryFriendRss(db *gorm.DB, opts model.FriendRssQueryOptions) (model.QueryF
 	return resp, nil
 }
 
+// GetFriendRssByID returns one RSS feed by its primary key.
+func GetFriendRssByID(db *gorm.DB, id int) (model.FriendRss, error) {
+	var feed model.FriendRss
+	err := db.Where("id = ?", id).First(&feed).Error
+	return feed, err
+}
+
 // CreateFriendRssFeeds creates a new friend_rss record, avoiding duplicates.
 func CreateFriendRssFeeds(db *gorm.DB, friendLinkID int, rssURL string, name string) (*model.FriendRss, error) {
 	if rssURL == "" {

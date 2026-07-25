@@ -5,6 +5,7 @@ import (
 	friendsRepositories "blog_api/src/repositories/friend"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,6 +14,28 @@ import (
 // RssPostHandler handles RSS post related requests
 type RssPostHandler struct {
 	DB *gorm.DB
+}
+
+// DeleteRssPost handles deletion of one persisted RSS article.
+func (h *RssPostHandler) DeleteRssPost(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id < 1 {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "无效的 RSS 文章 ID"))
+		return
+	}
+
+	rowsAffected, err := friendsRepositories.DeleteRssPostByID(h.DB, id)
+	if err != nil {
+		log.Printf("[rss_post] failed to delete post %d: %v", id, err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "删除 RSS 文章失败"))
+		return
+	}
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, model.NewErrorResponse(http.StatusNotFound, "未找到指定 RSS 文章"))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))
 }
 
 // GetRssPosts handles GET /api/rss request

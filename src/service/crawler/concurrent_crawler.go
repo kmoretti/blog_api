@@ -6,6 +6,8 @@ import (
 	"context"
 	"log"
 	"sync"
+
+	"gorm.io/gorm"
 )
 
 // CrawlJob 表示一个爬取任务
@@ -19,10 +21,32 @@ type CrawlJobResult struct {
 	Result model.CrawlResult
 }
 
-// RssParseJob 表示一个 RSS 解析任务
-type RssParseJob struct {
-	FriendRssID int
-	RssURL      string
+type rssParseJob struct {
+	Feed model.FriendRss
+}
+
+type rssParseJobResult struct {
+	feed    model.FriendRss
+	fetched fetchedRssFeed
+	err     error
+}
+
+// RssBatchResult summarizes a completed concurrent RSS scan.
+type RssBatchResult struct {
+	// ProcessedFeeds is the number of worker outcomes consumed by the writer.
+	ProcessedFeeds int
+
+	// SourceFailures is the number of feeds that could not be fetched or parsed.
+	SourceFailures int
+
+	// DatabaseFailures is the number of feed results that could not be persisted.
+	DatabaseFailures int
+
+	// CheckedItems is the number of items in successfully parsed feeds.
+	CheckedItems int
+
+	// InsertedItems is the number of new articles committed to the database.
+	InsertedItems int
 }
 
 // ImageCheckJob 表示一个图片检查任务
@@ -109,64 +133,123 @@ func crawlWorker(ctx context.Context, id int, jobs <-chan CrawlJob, results chan
 	}
 }
 
-// ParseRssFeedsConcurrently 并发解析多个 RSS 订阅源
-func ParseRssFeedsConcurrently(feeds []model.FriendRss, parseFunc func(friendRssID int, rssURL string)) {
+// ParseRssFeedsConcurrently fetches feeds concurrently and persists their
+// results through one synchronous database writer. A failure for one feed does
+// not prevent later queued feeds from being persisted.
+func ParseRssFeedsConcurrently(ctx context.Context, db *gorm.DB, feeds []model.FriendRss) RssBatchResult {
+	var summary RssBatchResult
 	if len(feeds) == 0 {
-		return
+		return summary
 	}
 
-	activeCount := 0
+	activeFeeds := make([]model.FriendRss, 0, len(feeds))
 	for _, feed := range feeds {
 		if feed.Status == "pause" || feed.IsDied {
 			log.Printf("[ConcurrentCrawler] 跳过状态为 %s, is_died=%t 的 RSS 订阅源: %s", feed.Status, feed.IsDied, feed.RssURL)
 			continue
 		}
-		activeCount++
+		activeFeeds = append(activeFeeds, feed)
 	}
+	activeCount := len(activeFeeds)
 	if activeCount == 0 {
 		log.Printf("[ConcurrentCrawler] 没有需要解析的 RSS 订阅源")
-		return
+		return summary
 	}
 
 	concurrency := effectiveConcurrency(activeCount)
 	log.Printf("[ConcurrentCrawler] 开始并发解析 %d 个 RSS 订阅源，并发数: %d", activeCount, concurrency)
 
-	// 创建任务通道
-	jobs := make(chan RssParseJob, concurrency)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	jobs := make(chan rssParseJob, concurrency)
+	results := make(chan rssParseJobResult, concurrency)
 
-	// 启动 worker goroutines
 	var wg sync.WaitGroup
 	for i := 0; i < concurrency; i++ {
 		wg.Add(1)
-		go rssParseWorker(i, jobs, parseFunc, &wg)
+		go rssParseWorker(ctx, i, jobs, results, &wg)
 	}
 
-	// 发送任务到任务通道
-	for _, feed := range feeds {
-		if feed.Status == "pause" || feed.IsDied {
+	go func() {
+		defer close(jobs)
+		for _, feed := range activeFeeds {
+			select {
+			case jobs <- rssParseJob{Feed: feed}:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for outcome := range results {
+		summary.ProcessedFeeds++
+		if outcome.err != nil {
+			if ctx.Err() != nil {
+				continue
+			}
+			summary.SourceFailures++
+			if err := updateRssParseState(db, outcome.feed.ID, false); err != nil {
+				summary.DatabaseFailures++
+				log.Printf("[ConcurrentCrawler][Writer] 记录 RSS 来源失败状态失败 (id=%d): %v", outcome.feed.ID, err)
+			}
+			log.Printf("[ConcurrentCrawler][Writer] RSS 来源解析失败 (id=%d, url=%s): %v", outcome.feed.ID, outcome.feed.RssURL, outcome.err)
 			continue
 		}
-		jobs <- RssParseJob{
-			FriendRssID: feed.ID,
-			RssURL:      feed.RssURL,
+
+		summary.CheckedItems += outcome.fetched.checkedItems
+		result, err := persistFetchedRssFeed(db, outcome.fetched)
+		if err != nil {
+			summary.DatabaseFailures++
+			log.Printf("[ConcurrentCrawler][Writer] RSS 入库失败 (id=%d, url=%s): %v", outcome.feed.ID, outcome.feed.RssURL, err)
+			continue
 		}
+		summary.InsertedItems += result.InsertedItems
+		log.Printf("RSS %s 共检查 %d 篇文章，新增 %d 篇", outcome.feed.RssURL, result.CheckedItems, result.InsertedItems)
 	}
-	close(jobs)
 
-	// 等待所有 worker 完成
-	wg.Wait()
-
-	log.Printf("[ConcurrentCrawler] 完成并发解析 %d 个 RSS 订阅源", activeCount)
+	log.Printf(
+		"[ConcurrentCrawler] 完成并发解析：处理 %d 个 RSS，来源失败 %d 个，数据库失败 %d 个，共检查 %d 篇文章，新增 %d 篇",
+		summary.ProcessedFeeds,
+		summary.SourceFailures,
+		summary.DatabaseFailures,
+		summary.CheckedItems,
+		summary.InsertedItems,
+	)
+	return summary
 }
 
-// rssParseWorker 是 RSS 解析的 worker goroutine
-func rssParseWorker(id int, jobs <-chan RssParseJob, parseFunc func(friendRssID int, rssURL string), wg *sync.WaitGroup) {
+func rssParseWorker(
+	ctx context.Context,
+	id int,
+	jobs <-chan rssParseJob,
+	results chan<- rssParseJobResult,
+	wg *sync.WaitGroup,
+) {
 	defer wg.Done()
 
-	for job := range jobs {
-		log.Printf("[ConcurrentCrawler][Worker %d] 正在解析 RSS: %s", id, job.RssURL)
-		parseFunc(job.FriendRssID, job.RssURL)
-		log.Printf("[ConcurrentCrawler][Worker %d] 完成解析 RSS: %s", id, job.RssURL)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case job, ok := <-jobs:
+			if !ok {
+				return
+			}
+			log.Printf("[ConcurrentCrawler][Worker %d] 正在抓取 RSS: %s", id, job.Feed.RssURL)
+			fetched, err := fetchRssFeed(ctx, job.Feed)
+			outcome := rssParseJobResult{feed: job.Feed, fetched: fetched, err: err}
+			select {
+			case results <- outcome:
+				log.Printf("[ConcurrentCrawler][Worker %d] 完成抓取 RSS: %s", id, job.Feed.RssURL)
+			case <-ctx.Done():
+				return
+			}
+		}
 	}
 }
 

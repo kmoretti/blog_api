@@ -45,6 +45,15 @@ func NewSuccessResponse(data interface{}) ApiResponse {
 	}
 }
 
+// NewSuccessResponseWithCode creates a success response whose code matches the HTTP status.
+func NewSuccessResponseWithCode(code int, data interface{}) ApiResponse {
+	return ApiResponse{
+		Code:    code,
+		Message: "success",
+		Data:    data,
+	}
+}
+
 // MomentWithMedia represents a moment with its associated media files.
 type MomentWithMedia struct {
 	Moment
