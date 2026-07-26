@@ -120,7 +120,7 @@
           <el-input type="textarea" v-model="form.description" />
         </el-form-item>
         <el-form-item label="站长邮箱" prop="email">
-          <el-input v-model="form.email" />
+          <el-input v-model="form.email" placeholder="选填，用于接收审核通知" />
         </el-form-item>
         <el-form-item label="订阅 RSS" prop="enable_rss">
           <el-switch v-model="form.enable_rss" />

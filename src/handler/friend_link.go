@@ -227,14 +227,17 @@ func (h *FriendLinkHandler) ApplyFriendLink(c *gin.Context) {
 		return
 	}
 
-	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" || strings.TrimSpace(req.Email) == "" {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "name, link, avatar and email are required"))
+	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "name, link and avatar are required"))
 		return
 	}
 
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
-		return
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email != "" {
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
+			return
+		}
 	}
 
 	link := strings.TrimRight(req.Link, "/")
@@ -285,14 +288,17 @@ func (h *FriendLinkHandler) UpdateApplyFriendLink(c *gin.Context) {
 	}
 
 	originalLink := strings.TrimRight(strings.TrimSpace(req.OriginalURL), "/")
-	if originalLink == "" || strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" || strings.TrimSpace(req.Email) == "" {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "original_url, name, link, avatar and email are required"))
+	if originalLink == "" || strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Link) == "" || strings.TrimSpace(req.Avatar) == "" {
+		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "original_url, name, link and avatar are required"))
 		return
 	}
 
-	if _, err := mail.ParseAddress(req.Email); err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
-		return
+	req.Email = strings.TrimSpace(req.Email)
+	if req.Email != "" {
+		if _, err := mail.ParseAddress(req.Email); err != nil {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid email address"))
+			return
+		}
 	}
 
 	newLink := strings.TrimRight(strings.TrimSpace(req.Link), "/")
