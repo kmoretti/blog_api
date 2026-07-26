@@ -75,6 +75,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			publicGroup.POST("/rss/refresh", rssPostHandler.RefreshRssPosts)
 			publicGroup.GET("/image/*id", imagePublicHandler.GetImage)
 			publicGroup.GET("/moments/", momentHandler.GetMoments)
+			publicGroup.GET("/moments/feed", momentHandler.GetMomentFeed)
 			publicGroup.POST("/moments/:id/reactions", middleware.AntiBotAuth(), middleware.FingerprintAuth(), momentReactionHandler.AddReaction)
 			publicGroup.DELETE("/moments/:id/reactions", middleware.AntiBotAuth(), middleware.FingerprintAuth(), momentReactionHandler.DeleteReaction)
 		}
