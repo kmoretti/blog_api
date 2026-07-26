@@ -29,6 +29,10 @@ func NotifyFriendLinkApplication(link model.FriendWebsite) {
 		log.Println("[email][friend] email disabled or admin address missing, skipping application notification")
 		return
 	}
+	if !cfg.Email.FriendLinkAdminNotify {
+		log.Println("[email][friend] admin notification disabled, skipping application notification")
+		return
+	}
 
 	data := buildEmailData(cfg, link)
 	content := EmailContent{
@@ -52,6 +56,10 @@ func NotifyFriendLinkApproved(link model.FriendWebsite) {
 		log.Println("[email][friend] email disabled or applicant address missing, skipping approval notification")
 		return
 	}
+	if !cfg.Email.FriendLinkUserNotify {
+		log.Println("[email][friend] user notification disabled, skipping approval notification")
+		return
+	}
 
 	data := buildEmailData(cfg, link)
 	content := EmailContent{
@@ -73,6 +81,10 @@ func NotifyFriendLinkRejected(link model.FriendWebsite) {
 	cfg := config.GetConfig()
 	if !cfg.Email.Enable || link.Email == "" {
 		log.Println("[email][friend] email disabled or applicant address missing, skipping rejection notification")
+		return
+	}
+	if !cfg.Email.FriendLinkUserNotify {
+		log.Println("[email][friend] user notification disabled, skipping rejection notification")
 		return
 	}
 

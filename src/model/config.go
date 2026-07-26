@@ -127,12 +127,14 @@ type TelegramConfig struct {
 
 // EmailConf 邮箱配置
 type EmailConf struct {
-	Enable   bool   `mapstructure:"enable"`
-	Host     string `mapstructure:"host"`
-	UserName string `mapstructure:"user_name"`
-	Password string `mapstructure:"password"`
-	Port     int    `mapstructure:"port"`
-	Sender   string `mapstructure:"sender"`
+	Enable                bool   `mapstructure:"enable"`
+	Host                  string `mapstructure:"host"`
+	UserName              string `mapstructure:"user_name"`
+	Password              string `mapstructure:"password"`
+	Port                  int    `mapstructure:"port"`
+	Sender                string `mapstructure:"sender"`
+	FriendLinkUserNotify  bool   `mapstructure:"friend_link_user_notify"`  // 是否向友链申请人发送通知邮件，默认 false
+	FriendLinkAdminNotify bool   `mapstructure:"friend_link_admin_notify"` // 是否向管理员发送友链申请通知邮件，默认 true
 }
 
 // SiteConfig 站点信息配置，用于邮件、通知等场景

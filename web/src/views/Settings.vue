@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="settings-container">
     <el-card class="settings-card">
       <template #header>
@@ -179,6 +179,20 @@
                   v-model="config.system_conf.email_conf.sender"
                   placeholder="Blog <no-reply@example.com>"
                 />
+              </el-form-item>
+
+              <el-divider content-position="left">友链通知</el-divider>
+              <el-form-item label="通知申请人">
+                <el-switch v-model="config.system_conf.email_conf.friend_link_user_notify" />
+                <div class="form-item-help">
+                  通过/拒绝友链申请时向申请人发送邮件通知。默认关闭。
+                </div>
+              </el-form-item>
+              <el-form-item label="通知管理员">
+                <el-switch v-model="config.system_conf.email_conf.friend_link_admin_notify" />
+                <div class="form-item-help">
+                  收到新的友链申请时向管理员发送邮件通知。默认开启。
+                </div>
               </el-form-item>
             </template>
           </el-form>
@@ -541,7 +555,9 @@ const config = ref<SystemConfig>({
       user_name: '',
       password: '',
       port: 465,
-      sender: ''
+      sender: '',
+      friend_link_user_notify: false,
+      friend_link_admin_notify: true
     },
     pwa_conf: {
       enable: false
@@ -579,7 +595,16 @@ onMounted(async () => {
         user_name: '',
         password: '',
         port: 465,
-        sender: ''
+        sender: '',
+        friend_link_user_notify: false,
+        friend_link_admin_notify: true
+      }
+    } else {
+      if (!('friend_link_user_notify' in res.system_conf.email_conf)) {
+        res.system_conf.email_conf.friend_link_user_notify = false
+      }
+      if (!('friend_link_admin_notify' in res.system_conf.email_conf)) {
+        res.system_conf.email_conf.friend_link_admin_notify = true
       }
     }
     if (!res.system_conf.pwa_conf) {

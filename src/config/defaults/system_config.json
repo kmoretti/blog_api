@@ -90,7 +90,9 @@
       "user_name": "",
       "password": "",
       "port": 465,
-      "sender": ""
+      "sender": "",
+      "friend_link_user_notify": false,
+      "friend_link_admin_notify": true
     },
     "site_conf": {
       "name": "",

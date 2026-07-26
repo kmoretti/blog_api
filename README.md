@@ -802,13 +802,18 @@ page_size    每页数量，默认 12，最大 100
 
 #### 友链申请邮件通知
 
-当 `system_conf.email_conf.enable` 为 `true` 且发件邮箱 `user_name` 已填写时，系统会在以下场景自动发送邮件：
+当 `system_conf.email_conf.enable` 为 `true` 且发件邮箱 `user_name` 已填写时，系统会在以下场景自动发送邮件。发送行为还受两个开关控制：
 
-| 场景 | 收件人 | 触发条件 | 邮件内容 |
-| --- | --- | --- | --- |
-| 新申请通知 | 管理员（复用 `email_conf.user_name`） | 访客通过 `/api/public/friend/apply` 或 `/api/public/friend/update-apply` 提交申请 | 站点信息、申请人邮箱、前往审核链接 |
-| 通过通知 | 申请人（`friend_link.email`） | 管理员将状态从其他状态改为 `survival` | 已通过提示、站点信息、友链页面链接 |
-| 拒绝通知 | 申请人（`friend_link.email`） | 管理员将状态改为 `rejected` | 未通过提示、拒绝原因（如填写）、重新申请链接 |
+| 开关 | 默认值 | 控制范围 |
+| --- | --- | --- |
+| `email_conf.friend_link_admin_notify` | `true` | 新申请通知是否发送给管理员 |
+| `email_conf.friend_link_user_notify` | `false` | 通过/拒绝通知是否发送给申请人 |
+
+| 场景 | 收件人 | 触发条件 | 受控开关 | 邮件内容 |
+| --- | --- | --- | --- | --- |
+| 新申请通知 | 管理员（复用 `email_conf.user_name`） | 访客通过 `/api/public/friend/apply` 或 `/api/public/friend/update-apply` 提交申请 | `friend_link_admin_notify` | 站点信息、申请人邮箱、前往审核链接 |
+| 通过通知 | 申请人（`friend_link.email`） | 管理员将状态从其他状态改为 `survival` | `friend_link_user_notify` | 已通过提示、站点信息、友链页面链接 |
+| 拒绝通知 | 申请人（`friend_link.email`） | 管理员将状态改为 `rejected` | `friend_link_user_notify` | 未通过提示、拒绝原因（如填写）、重新申请链接 |
 
 邮件模板中的站点名称和站点地址读取自 `system_conf.site_conf`：
 

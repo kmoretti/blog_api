@@ -83,6 +83,8 @@ export interface EmailConfig {
   password: string;
   port: number;
   sender: string;
+  friend_link_user_notify: boolean;
+  friend_link_admin_notify: boolean;
 }
 
 export interface IntegratedTargets {
