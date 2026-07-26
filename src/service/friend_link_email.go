@@ -26,11 +26,13 @@ type FriendLinkEmailData struct {
 func NotifyFriendLinkApplication(link model.FriendWebsite) {
 	cfg := config.GetConfig()
 	if !cfg.Email.Enable || cfg.Email.UserName == "" {
-		log.Println("[email][friend] email disabled or admin address missing, skipping application notification")
+		log.Printf("[email][friend] email disabled or admin address missing (enable=%t, user_name=%q), skipping application notification",
+			cfg.Email.Enable, cfg.Email.UserName)
 		return
 	}
 	if !cfg.Email.FriendLinkAdminNotify {
-		log.Println("[email][friend] admin notification disabled, skipping application notification")
+		log.Printf("[email][friend] admin notification disabled (friend_link_admin_notify=%t), skipping application notification",
+			cfg.Email.FriendLinkAdminNotify)
 		return
 	}
 

@@ -155,6 +155,14 @@ func unmarshalConfig(cfg *model.Config) error {
 		return fmt.Errorf("解析系统配置失败: %w", err)
 	}
 
+	// 友链邮件通知开关默认值（兼容旧配置，避免零值导致通知被静默关闭）
+	if !v.IsSet("system_conf.email_conf.friend_link_admin_notify") {
+		cfg.Email.FriendLinkAdminNotify = true
+	}
+	if !v.IsSet("system_conf.email_conf.friend_link_user_notify") {
+		cfg.Email.FriendLinkUserNotify = false
+	}
+
 	if cfg.Data.Database.Path != "" {
 		cfg.Safe.ExcludePaths = append(cfg.Safe.ExcludePaths, cfg.Data.Database.Path)
 	}
