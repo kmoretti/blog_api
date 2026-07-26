@@ -43,6 +43,8 @@ func GetConfig() *model.Config {
 func loadConfig() (*model.Config, error) {
 	v = viper.New()
 	v.SetDefault("CRON_SCAN_ON_STARTUP", true)
+	v.SetDefault("system_conf.email_conf.friend_link_user_notify", false)
+	v.SetDefault("system_conf.email_conf.friend_link_admin_notify", true)
 	v.SetConfigFile(".env")
 	v.SetConfigType("env")
 	v.AutomaticEnv()                                   // 自动读取匹配的环境变量
@@ -185,6 +187,9 @@ func unmarshalConfig(cfg *model.Config) error {
 	if emailPassword := v.GetString("EMAIL_PASSWORD"); emailPassword != "" {
 		cfg.Email.Password = emailPassword
 	}
+
+	log.Printf("[config] email enable=%t, admin_notify=%t, user_notify=%t",
+		cfg.Email.Enable, cfg.Email.FriendLinkAdminNotify, cfg.Email.FriendLinkUserNotify)
 
 	friendListPath := filepath.Join(cfg.ConfigPath, "friend_list.json")
 	friendListData, err := os.ReadFile(friendListPath)
