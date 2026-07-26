@@ -91,6 +91,10 @@
       "password": "",
       "port": 465,
       "sender": ""
+    },
+    "site_conf": {
+      "name": "",
+      "url": ""
     }
   }
 }

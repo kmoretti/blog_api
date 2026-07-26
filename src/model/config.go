@@ -20,6 +20,7 @@ type Config struct {
 	OSS               OSSConfig               `mapstructure:"oss_conf"`
 	Verify            VerifyConfig            `mapstructure:"verify_conf"`
 	Email             EmailConf               `mapstructure:"email_conf"`
+	Site              SiteConfig              `mapstructure:"site_conf"`
 
 	// 友链配置
 	FriendLinks []FriendWebsite
@@ -132,6 +133,12 @@ type EmailConf struct {
 	Password string `mapstructure:"password"`
 	Port     int    `mapstructure:"port"`
 	Sender   string `mapstructure:"sender"`
+}
+
+// SiteConfig 站点信息配置，用于邮件、通知等场景
+type SiteConfig struct {
+	Name string `mapstructure:"name"`
+	URL  string `mapstructure:"url"`
 }
 
 // PwaConfig PWA 配置

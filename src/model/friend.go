@@ -17,6 +17,7 @@ type FriendWebsite struct {
 	Snapshot        string `json:"snapshot,omitempty" gorm:"column:snapshot"`
 	FriendLinkPage  string `json:"friend_link_page,omitempty" gorm:"column:friend_link_page"`
 	Feed            string `json:"feed,omitempty" gorm:"column:feed"`
+	RejectionReason string `json:"rejection_reason,omitempty" gorm:"column:rejection_reason"`
 }
 
 // TableName sets the insert table name for this struct type.

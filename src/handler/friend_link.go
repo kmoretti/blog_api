@@ -4,6 +4,7 @@ import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
 	crawlerService "blog_api/src/service/crawler"
+	"blog_api/src/service"
 	"errors"
 	"log"
 	"net/http"
@@ -263,6 +264,8 @@ func (h *FriendLinkHandler) ApplyFriendLink(c *gin.Context) {
 		return
 	}
 
+	go service.NotifyFriendLinkApplication(submission)
+
 	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, gin.H{
 		"id":      id,
 		"status":  "pending",
@@ -336,6 +339,8 @@ func (h *FriendLinkHandler) UpdateApplyFriendLink(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to submit update application"))
 		return
 	}
+
+	go service.NotifyFriendLinkApplication(submission)
 
 	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, gin.H{
 		"id":           id,

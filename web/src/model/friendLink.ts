@@ -7,7 +7,7 @@ export interface FriendLink {
   link: string
   avatar: string
   description: string
-  status: 'survival' | 'timeout' | 'error' | 'pending'
+  status: 'survival' | 'timeout' | 'error' | 'pending' | 'rejected'
   enable_rss: boolean
   skip_health_check: boolean
   is_died?: boolean
@@ -17,6 +17,7 @@ export interface FriendLink {
   snapshot?: string
   friend_link_page?: string
   feed?: string
+  rejection_reason?: string
 }
 
 /**
@@ -62,6 +63,7 @@ export type UpdateFriendLinkData = Partial<Omit<FriendLink, 'id' | 'updated_at'>
   website_name?: string
   website_url?: string
   website_icon_url?: string
+  rejection_reason?: string
 }
 
 export interface UpdateFriendLinkPayload {

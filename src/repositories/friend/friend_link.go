@@ -283,12 +283,13 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		"email":             true,
 		"times":             true,
 		"status":            true,
-		"enable_rss":         true,
-		"is_died":            true,
-		"skip_health_check":  true,
-		"snapshot":           true,
-		"friend_link_page":   true,
-		"feed":               true,
+		"enable_rss":        true,
+		"is_died":           true,
+		"skip_health_check": true,
+		"snapshot":          true,
+		"friend_link_page":  true,
+		"feed":              true,
+		"rejection_reason":  true,
 	}
 
 	updates := map[string]interface{}{}

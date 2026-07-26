@@ -21,6 +21,7 @@
           style="width: 150px; margin-right: 10px">
           <el-option label="正常" value="survival"></el-option>
           <el-option label="待定" value="pending"></el-option>
+          <el-option label="已拒绝" value="rejected"></el-option>
           <el-option label="超时" value="timeout"></el-option>
           <el-option label="错误" value="error"></el-option>
         </el-select>
@@ -143,9 +144,13 @@
           <el-select v-model="form.status">
             <el-option label="正常" value="survival"></el-option>
             <el-option label="待定" value="pending"></el-option>
+            <el-option label="已拒绝" value="rejected"></el-option>
             <el-option label="超时" value="timeout"></el-option>
             <el-option label="错误" value="error"></el-option>
           </el-select>
+        </el-form-item>
+        <el-form-item label="拒绝理由" prop="rejection_reason" v-if="isEditMode && form.status === 'rejected'">
+          <el-input type="textarea" v-model="form.rejection_reason" placeholder="填写拒绝原因，将随通知邮件发送给申请人" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -190,13 +195,14 @@ const form = reactive<{
   description: string
   email: string
   times: number
-  status: 'survival' | 'timeout' | 'error' | 'pending'
+  status: 'survival' | 'timeout' | 'error' | 'pending' | 'rejected'
   enable_rss: boolean
   skip_health_check: boolean
   snapshot: string
   friend_link_page: string
   feed: string
   is_died: boolean
+  rejection_reason: string
 }>({
   id: 0,
   name: '',
@@ -211,7 +217,8 @@ const form = reactive<{
   snapshot: '',
   friend_link_page: '',
   feed: '',
-  is_died: false
+  is_died: false,
+  rejection_reason: ''
 })
 
 const rules = reactive<FormRules>({
@@ -290,7 +297,8 @@ const resetForm = () => {
     snapshot: '',
     friend_link_page: '',
     feed: '',
-    is_died: false
+    is_died: false,
+    rejection_reason: ''
   })
 }
 
@@ -364,6 +372,8 @@ const statusTagType = (status: string) => {
       return 'success'
     case 'pending':
       return 'info'
+    case 'rejected':
+      return 'danger'
     case 'timeout':
       return 'warning'
     case 'error':

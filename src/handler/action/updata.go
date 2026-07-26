@@ -3,6 +3,7 @@ package handlerAction
 import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
+	"blog_api/src/service"
 	"errors"
 	"log"
 	"net/http"
@@ -198,6 +199,14 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 		}
 	}
 
+	// Fetch the existing link so we can detect status transitions for email notifications.
+	existingLink, err := friendsRepositories.GetFriendLinkByID(h.DB, int(id))
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("[handler][updata][ERR] 查询友情链接失败: %v", err)
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to retrieve friend link"))
+		return
+	}
+
 	rowsAffected, err := friendsRepositories.UpdateFriendLinkByID(h.DB, uint(id), req)
 	if err != nil {
 		log.Printf("[handler][updata][ERR] 更新友情链接失败: %v", err)
@@ -209,6 +218,22 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 		log.Printf("[handler][updata] No friend link found with ID %d or no fields to update", id)
 		c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "no friend link found with the given ID or no fields needed update"))
 		return
+	}
+
+	// Send approval/rejection notification when the status changes.
+	if newStatus, ok := req.Data["status"].(string); ok && existingLink.Status != newStatus {
+		updatedLink := existingLink
+		updatedLink.Status = newStatus
+		if reason, ok := req.Data["rejection_reason"].(string); ok {
+			updatedLink.RejectionReason = reason
+		}
+
+		switch newStatus {
+		case "survival":
+			go service.NotifyFriendLinkApproved(updatedLink)
+		case "rejected":
+			go service.NotifyFriendLinkRejected(updatedLink)
+		}
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))

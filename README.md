@@ -107,7 +107,7 @@ openssl rand -hex 32
 
 替换为独立的随机值。不要在命令、日志、截图或公开文档中暴露这些凭据。
 
-如果启用了 Telegram、Discord、OSS、邮箱或 Turnstile 等功能，还需要按照 `system_config.json` 和 `.env.example` 中的字段补充对应配置。配置文件修改后需要重新创建或重启容器才会生效。
+如果启用了 Telegram、Discord、OSS、邮箱或 Turnstile 等功能，还需要按照 `system_config.json` 和 `.env.example` 中的字段补充对应配置。友链申请邮件通知还需要配置 `system_conf.site_conf`（站点名称和 URL，用于邮件模板），详见下文「友链申请邮件通知」。配置文件修改后需要重新创建或重启容器才会生效。
 
 ### 3. 数据和配置的持久化范围
 
@@ -697,7 +697,7 @@ curl -X POST http://localhost:10024/api/public/friend \
 
 ##### 友链申请接口
 
-`/api/public/friend/apply` 面向匿名访客，数据写入 `friend_link` 表，默认状态为 `pending`。管理员可通过现有 `PUT /api/action/friend/:id` 接口将状态改为 `survival`（通过）或 `rejected`（拒绝），前端申请列表会同步展示对应审核结果。
+`/api/public/friend/apply` 面向匿名访客，数据写入 `friend_link` 表，默认状态为 `pending`。提交成功后，若邮箱功能已启用，系统会自动向管理员发送新申请通知邮件。管理员可通过现有 `PUT /api/action/friend/:id` 接口将状态改为 `survival`（通过）或 `rejected`（拒绝），审核结果邮件会自动发送给申请人，前端申请列表也会同步展示对应状态。
 
 请求字段：
 
@@ -746,7 +746,7 @@ curl -X POST http://localhost:10024/api/public/friend/apply \
 
 ##### 友链更新申请接口
 
-`/api/public/friend/update-apply` 用于更新已有友链。后端会根据 `original_url` 查找原记录，并校验邮箱是否与原登记邮箱一致。
+`/api/public/friend/update-apply` 用于更新已有友链。后端会根据 `original_url` 查找原记录，并校验邮箱是否与原登记邮箱一致。提交成功后，若邮箱功能已启用，同样会向管理员发送新申请通知邮件。
 
 请求字段：
 
@@ -799,6 +799,33 @@ page_size    每页数量，默认 12，最大 100
   }
 }
 ```
+
+#### 友链申请邮件通知
+
+当 `system_conf.email_conf.enable` 为 `true` 且发件邮箱 `user_name` 已填写时，系统会在以下场景自动发送邮件：
+
+| 场景 | 收件人 | 触发条件 | 邮件内容 |
+| --- | --- | --- | --- |
+| 新申请通知 | 管理员（复用 `email_conf.user_name`） | 访客通过 `/api/public/friend/apply` 或 `/api/public/friend/update-apply` 提交申请 | 站点信息、申请人邮箱、前往审核链接 |
+| 通过通知 | 申请人（`friend_link.email`） | 管理员将状态从其他状态改为 `survival` | 已通过提示、站点信息、友链页面链接 |
+| 拒绝通知 | 申请人（`friend_link.email`） | 管理员将状态改为 `rejected` | 未通过提示、拒绝原因（如填写）、重新申请链接 |
+
+邮件模板中的站点名称和站点地址读取自 `system_conf.site_conf`：
+
+```json
+{
+  "site_conf": {
+    "name": "我的博客",
+    "url": "https://example.com"
+  }
+}
+```
+
+若未配置 `site_conf`，邮件模板将使用默认值：`name` 为「我的博客」，`url` 为 `https://example.com`。
+
+管理员在管理后台将申请状态改为 `rejected` 时，可填写 `rejection_reason`（拒绝理由）。该理由会随拒绝邮件发送给申请人；若不填写，邮件中只显示未通过审核，不展示原因。
+
+> 邮件发送失败不会阻塞接口返回，失败原因会记录在后端日志中。
 
 #### RSS 与图片
 
@@ -853,7 +880,7 @@ Authorization: Bearer <JWT>
 | `GET` | `/api/action/friend` | 分页获取完整友链 |
 | `GET` | `/api/action/friend/:id` | 获取单条完整友链 |
 | `POST` | `/api/action/friend` | 创建友链 |
-| `PUT` | `/api/action/friend/:id` | 更新友链 |
+| `PUT` | `/api/action/friend/:id` | 更新友链；状态改为 `survival` 或 `rejected` 时会自动发送邮件通知申请人 |
 | `DELETE` | `/api/action/friend/:id` | 删除友链 |
 | `GET` | `/api/action/rss` | 分页获取 RSS 配置 |
 | `POST` | `/api/action/rss` | 创建 RSS 配置 |
