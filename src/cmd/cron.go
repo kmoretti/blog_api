@@ -5,6 +5,7 @@ import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
 	crawlerService "blog_api/src/service/crawler"
+	"blog_api/src/service/fcircle"
 	"context"
 	"log"
 	"time"
@@ -85,6 +86,9 @@ func RunFriendLinkCrawlerJob(db *gorm.DB) {
 		log.Printf("[Cron] 友链爬取中断: %v", err)
 	}
 	log.Println("[Cron] 友链爬取任务完成")
+
+	// 友链数据可能已变更，触发 fcircle.json 延迟重建
+	fcircle.ScheduleRegenerate()
 }
 
 // RunDiedFriendLinkCheckJob 执行失效友链的检查（并发模式）
@@ -121,6 +125,9 @@ func RunDiedFriendLinkCheckJob(db *gorm.DB) {
 		log.Printf("[Cron] 失效友链检查中断: %v", err)
 	}
 	log.Println("[Cron] 失效友链检查任务完成")
+
+	// 友链状态可能已变更，触发 fcircle.json 延迟重建
+	fcircle.ScheduleRegenerate()
 }
 
 // RunDiedRssCheckJob 执行失效 RSS 的探活检查（低频）

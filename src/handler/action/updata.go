@@ -4,6 +4,7 @@ import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
 	"blog_api/src/service"
+	"blog_api/src/service/fcircle"
 	"errors"
 	"log"
 	"net/http"
@@ -52,6 +53,8 @@ func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"id": id}))
+
+	fcircle.ScheduleRegenerate()
 }
 
 // DeleteOwnedFriendLink handles deletion by an email-authenticated owner.
@@ -101,6 +104,8 @@ func (h *UpdataHandler) DeleteOwnedFriendLink(c *gin.Context) {
 		"enable_rss":  deleted.EnableRss,
 		"updated_at":  deleted.UpdatedAt,
 	}}))
+
+	fcircle.ScheduleRegenerate()
 }
 
 // DeleteFriendLink handles DELETE /api/action/friend/:id request
@@ -123,6 +128,8 @@ func (h *UpdataHandler) DeleteFriendLink(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"deleted_link": deletedLink}))
+
+	fcircle.ScheduleRegenerate()
 }
 
 // EditFriendLink handles PUT /api/action/friend/:id request
@@ -237,4 +244,6 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{"rows_affected": rowsAffected}))
+
+	fcircle.ScheduleRegenerate()
 }

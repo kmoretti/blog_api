@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"blog_api/src/model"
+	"blog_api/src/service/fcircle"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -38,6 +40,14 @@ func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engin
 	if os.Getenv("PPROF_ENABLED") == "true" {
 		pprof.Register(router)
 	}
+
+	// 初始化并暴露 fcircle.json（友链圈子聚合格式）
+	dataDir := resolveStaticBaseDir(cfg)
+	if err := fcircle.Init(db, dataDir); err != nil {
+		log.Printf("[router][fcircle] 初始化失败: %v", err)
+	}
+	router.GET("/fcircle.json", fcircle.Handler())
+
 	router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/panel/")
 	})

@@ -800,6 +800,683 @@ page_size    每页数量，默认 12，最大 100
 }
 ```
 
+##### 前端嵌入示例（参考 friendlink-verify 方式四）
+
+下面是一份可整段复制到任意静态页面的友链申请前端示例，包含：
+
+- 申请条件勾选（全部勾选后才显示表单）
+- 申请 / 更新双模式表单
+- 公开申请列表（状态筛选、名称搜索、分页）
+- 明暗模式自动适配（依赖外层 `data-theme="dark"`）
+- Turnstile 人机验证自动检测与渲染
+
+> 样式参考自 [shangskr/friendlink-verify](https://github.com/shangskr/friendlink-verify) 的「方式四：Hexo + Butterfly 主题」，请求地址已适配为本项目的 `/api/public/friend/apply`、`/api/public/friend/update-apply` 与 `/api/public/friend/submissions`。请将代码中的 `https://your-blog-api.example.com` 替换为实际后端地址，并确认后端 CORS 已放行当前页面域名。
+
+###### 1. CSS
+
+```css
+#fl-wrap {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 20px 0;
+  --fl-text: #363636;
+  --fl-text-secondary: #666;
+  --fl-text-muted: #999;
+  --fl-bg: rgba(255, 255, 255, 0.88);
+  --fl-border: 1px solid rgb(169, 169, 169);
+  --fl-input-bg: #fff;
+  --fl-input-border: #d1d5db;
+  --fl-input-text: #363636;
+  --fl-err-bg: #fef2f2;
+  --fl-err-border: #fecaca;
+  --fl-err-text: #dc2626;
+  --fl-btn-bg: #49b1f5;
+  --fl-btn-hover: #3d9ce0;
+  --fl-btn-disabled: #bbb;
+  --fl-success-h3: #363636;
+  --fl-option-btn-border: #49b1f5;
+  --fl-option-btn-active-bg: #49b1f5;
+}
+[data-theme='dark'] #fl-wrap {
+  --fl-text: #c0c0c0;
+  --fl-text-secondary: #aaa;
+  --fl-text-muted: #999;
+  --fl-bg: rgba(25, 25, 25, 0.88);
+  --fl-border: 1px solid rgb(80, 80, 80);
+  --fl-input-bg: rgb(42, 42, 42);
+  --fl-input-border: rgb(80, 80, 80);
+  --fl-input-text: #eee;
+  --fl-err-bg: rgba(100, 30, 30, 0.3);
+  --fl-err-border: rgb(120, 30, 30);
+  --fl-err-text: #ffa0a0;
+  --fl-success-h3: #eee;
+  --fl-checkbox: #49b1f5;
+}
+#fl-wrap .fl-card {
+  margin-top: 16px;
+  padding: 20px;
+  background: var(--fl-bg);
+  backdrop-filter: blur(5px) saturate(150%);
+  border: var(--fl-border);
+  border-radius: 12px;
+}
+#fl-wrap label.fl-condition {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 0;
+  color: var(--fl-text);
+}
+#fl-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--fl-checkbox, #49b1f5);
+  cursor: pointer;
+}
+#fl-wrap .fl-hint {
+  font-size: 13px;
+  color: var(--fl-text-muted);
+}
+#fl-wrap .fl-condition-hint {
+  margin-top: 10px;
+  color: #ef4444;
+  font-size: 13px;
+}
+#fl-wrap .fl-form {
+  display: none;
+}
+#fl-wrap .fl-field {
+  margin-bottom: 14px;
+}
+#fl-wrap .fl-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fl-text);
+  margin-bottom: 4px;
+}
+#fl-wrap .fl-star {
+  color: #ef4444;
+}
+#fl-wrap .fl-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+  border: 1px solid var(--fl-input-border);
+  border-radius: 6px;
+  outline: none;
+  box-sizing: border-box;
+  color: var(--fl-input-text);
+  background: var(--fl-input-bg);
+}
+#fl-wrap .fl-input:focus {
+  border-color: #49b1f5;
+  box-shadow: 0 0 0 2px rgba(73, 177, 245, .2);
+}
+#fl-wrap .fl-err {
+  display: none;
+  padding: 8px 12px;
+  background: var(--fl-err-bg);
+  border: 1px solid var(--fl-err-border);
+  border-radius: 6px;
+  color: var(--fl-err-text);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+#fl-wrap .fl-btn {
+  width: 100%;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--fl-btn-bg);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#fl-wrap .fl-btn:hover { background: var(--fl-btn-hover); }
+#fl-wrap .fl-btn:disabled { background: var(--fl-btn-disabled); cursor: not-allowed; }
+#fl-wrap .fl-success {
+  text-align: center;
+  padding: 48px 24px;
+}
+#fl-wrap .fl-success h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fl-success-h3);
+}
+#fl-wrap .fl-success p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fl-text-secondary);
+}
+#fl-wrap .fl-option-btns {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#fl-wrap .fl-option-btn {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid var(--fl-input-border);
+  border-radius: 8px;
+  background: var(--fl-input-bg);
+  color: var(--fl-text);
+  cursor: pointer;
+}
+#fl-wrap .fl-option-btn.active {
+  border-color: var(--fl-option-btn-active-bg);
+  background: var(--fl-option-btn-active-bg);
+  color: #fff;
+}
+#fl-wrap .fl-status-section {
+  margin-top: 32px;
+}
+#fl-wrap .fl-status-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#fl-wrap .fl-status-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fl-text);
+  margin: 0;
+}
+#fl-wrap .fl-status-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+#fl-wrap .fl-status-select,
+#fl-wrap .fl-status-search {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--fl-input-border);
+  border-radius: 6px;
+  background: var(--fl-input-bg);
+  color: var(--fl-input-text);
+}
+#fl-wrap .fl-status-list {
+  display: grid;
+  gap: 10px;
+}
+#fl-wrap .fl-status-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: var(--fl-border);
+  border-radius: 8px;
+  background: var(--fl-bg);
+}
+#fl-wrap .fl-status-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fl-text);
+}
+#fl-wrap .fl-status-desc {
+  font-size: 12px;
+  color: var(--fl-text-muted);
+  margin-top: 2px;
+}
+#fl-wrap .fl-status-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+}
+#fl-wrap .fl-status-badge.pending { background: #fef3c7; color: #92400e; }
+#fl-wrap .fl-status-badge.survival { background: #d1fae5; color: #065f46; }
+#fl-wrap .fl-status-badge.rejected { background: #fee2e2; color: #991b1b; }
+#fl-wrap .fl-status-badge.timeout { background: #e5e7eb; color: #374151; }
+#fl-wrap .fl-status-badge.error { background: #fce7f3; color: #9d174d; }
+#fl-wrap .fl-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+#fl-wrap .fl-page-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--fl-input-border);
+  border-radius: 6px;
+  background: var(--fl-input-bg);
+  color: var(--fl-text);
+  cursor: pointer;
+}
+#fl-wrap .fl-page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+#fl-wrap .fl-page-info { font-size: 13px; color: var(--fl-text-secondary); }
+```
+
+###### 2. HTML
+
+```html
+<div id="fl-wrap">
+  <div class="fl-card">
+    <h3 style="margin:0 0 4px;font-size:15px;font-weight:600;color:var(--fl-text);">友链申请</h3>
+    <p class="fl-hint">填写以下信息申请交换友链，审核通过后会显示在友链列表中。</p>
+
+    <div id="fl-conditions">
+      <p class="fl-hint" style="margin:8px 0;">请先确认满足以下条件：</p>
+      <label class="fl-condition">
+        <input type="checkbox" class="fl-condition-check" />
+        <span>我已添加 <strong>本站</strong> 的友情链接</span>
+      </label>
+      <label class="fl-condition">
+        <input type="checkbox" class="fl-condition-check" />
+        <span>我的网站现在可以在中国大陆区域正常访问</span>
+      </label>
+      <label class="fl-condition">
+        <input type="checkbox" class="fl-condition-check" />
+        <span>网站内容符合中国大陆法律法规</span>
+      </label>
+      <label class="fl-condition">
+        <input type="checkbox" class="fl-condition-check" />
+        <span>我的链接主体为 <strong>个人</strong>，网站类型为 <strong>博客</strong></span>
+      </label>
+      <label class="fl-condition">
+        <input type="checkbox" class="fl-condition-check" />
+        <span>网站域名不是免费域名（github.io、gitee.io 除外）</span>
+      </label>
+      <div class="fl-condition-hint" id="fl-condition-hint">
+        ⚠️ 请先勾选所有条件后再填写申请表单
+      </div>
+    </div>
+
+    <div class="fl-form" id="fl-form-wrap">
+      <div class="fl-option-btns">
+        <button type="button" class="fl-option-btn active" data-mode="apply">申请友链</button>
+        <button type="button" class="fl-option-btn" data-mode="update">更新友链</button>
+      </div>
+
+      <form id="fl-form-apply">
+        <div class="fl-err" id="fl-err-apply"></div>
+        <div class="fl-field">
+          <label class="fl-label">站点名称 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="name" required placeholder="站点名称" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">网站地址 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="link" type="url" required placeholder="https://example.com" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">头像地址 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="avatar" type="url" required placeholder="https://example.com/avatar.png" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">联系邮箱 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="email" type="email" required placeholder="you@example.com" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">站点描述</label>
+          <input class="fl-input" name="description" placeholder="一句话介绍" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">站点截图 URL</label>
+          <input class="fl-input" name="snapshot" type="url" placeholder="https://example.com/screenshot.png" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">友链页面地址</label>
+          <input class="fl-input" name="friend_link_page" type="url" placeholder="https://example.com/links" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">RSS 订阅地址</label>
+          <input class="fl-input" name="feed" type="url" placeholder="https://example.com/feed.xml" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-condition" style="padding:0;">
+            <input type="checkbox" name="enable_rss" value="true" />
+            <span>允许抓取 RSS 文章</span>
+          </label>
+        </div>
+        <div class="fl-field" id="fl-turnstile-apply"></div>
+        <button type="submit" class="fl-btn" data-text="提交申请">提交申请</button>
+      </form>
+
+      <form id="fl-form-update" hidden>
+        <div class="fl-err" id="fl-err-update"></div>
+        <div class="fl-field">
+          <label class="fl-label">原站点地址 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="original_url" type="url" required placeholder="https://old.example.com" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">站点名称 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="name" required placeholder="站点名称" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">新网站地址 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="link" type="url" required placeholder="https://example.com" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">头像地址 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="avatar" type="url" required placeholder="https://example.com/avatar.png" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">联系邮箱 <span class="fl-star">*</span></label>
+          <input class="fl-input" name="email" type="email" required placeholder="you@example.com" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">站点描述</label>
+          <input class="fl-input" name="description" placeholder="一句话介绍" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">站点截图 URL</label>
+          <input class="fl-input" name="snapshot" type="url" placeholder="https://example.com/screenshot.png" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">友链页面地址</label>
+          <input class="fl-input" name="friend_link_page" type="url" placeholder="https://example.com/links" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-label">RSS 订阅地址</label>
+          <input class="fl-input" name="feed" type="url" placeholder="https://example.com/feed.xml" />
+        </div>
+        <div class="fl-field">
+          <label class="fl-condition" style="padding:0;">
+            <input type="checkbox" name="enable_rss" value="true" />
+            <span>允许抓取 RSS 文章</span>
+          </label>
+        </div>
+        <div class="fl-field" id="fl-turnstile-update"></div>
+        <button type="submit" class="fl-btn" data-text="提交更新">提交更新</button>
+      </form>
+    </div>
+
+    <div class="fl-success" id="fl-success" hidden>
+      <h3>✅ 提交成功</h3>
+      <p id="fl-success-msg"></p>
+      <button type="button" class="fl-btn" style="margin-top:16px;width:auto;" id="fl-continue">继续申请</button>
+    </div>
+  </div>
+
+  <div class="fl-card fl-status-section">
+    <div class="fl-status-header">
+      <h3 class="fl-status-title">申请列表 <span class="fl-hint" id="fl-status-count"></span></h3>
+      <div class="fl-status-controls">
+        <select class="fl-status-select" id="fl-status-filter">
+          <option value="">全部状态</option>
+          <option value="pending">未审批</option>
+          <option value="survival">已通过</option>
+          <option value="rejected">已拒绝</option>
+          <option value="timeout">超时</option>
+          <option value="error">错误</option>
+        </select>
+        <input class="fl-status-search" id="fl-status-search" type="text" placeholder="搜索名称" />
+      </div>
+    </div>
+    <div id="fl-status-list" class="fl-status-list"></div>
+    <div class="fl-pagination" id="fl-pagination" hidden>
+      <button class="fl-page-btn" id="fl-page-prev" disabled>←</button>
+      <span class="fl-page-info" id="fl-page-info"></span>
+      <button class="fl-page-btn" id="fl-page-next" disabled>→</button>
+    </div>
+  </div>
+</div>
+```
+
+###### 3. JavaScript
+
+```html
+<script>
+(function () {
+  const API_BASE = 'https://your-blog-api.example.com'
+  const PAGE_SIZE = 12
+
+  let turnstileSiteKey = null
+  let turnstileWidgets = { apply: null, update: null }
+  let currentMode = 'apply'
+  let currentPage = 1
+  let totalPages = 1
+
+  const qs = (s) => document.querySelector(s)
+  const qsa = (s) => Array.from(document.querySelectorAll(s))
+
+  async function apiFetch(path, options = {}) {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data.message || `请求失败：${res.status}`)
+    }
+    return data
+  }
+
+  function showError(mode, msg) {
+    const el = qs(`#fl-err-${mode}`)
+    el.textContent = msg
+    el.style.display = msg ? 'block' : 'none'
+  }
+
+  function setLoading(btn, loading) {
+    btn.disabled = loading
+    btn.textContent = loading ? '提交中...' : btn.dataset.text
+  }
+
+  function isDark() {
+    return document.documentElement.dataset.theme === 'dark' ||
+      (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  }
+
+  // 申请条件
+  function updateConditionUI() {
+    const allChecked = qsa('.fl-condition-check').every((c) => c.checked)
+    qs('#fl-condition-hint').style.display = allChecked ? 'none' : 'block'
+    qs('#fl-form-wrap').style.display = allChecked ? 'block' : 'none'
+    if (allChecked) renderTurnstile(currentMode)
+  }
+  qsa('.fl-condition-check').forEach((c) => c.addEventListener('change', updateConditionUI))
+
+  // 模式切换
+  qsa('.fl-option-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentMode = btn.dataset.mode
+      qsa('.fl-option-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === currentMode))
+      qs('#fl-form-apply').hidden = currentMode !== 'apply'
+      qs('#fl-form-update').hidden = currentMode !== 'update'
+      showError('apply', '')
+      showError('update', '')
+      renderTurnstile(currentMode)
+    })
+  })
+
+  // Turnstile
+  async function loadTurnstileScript() {
+    if (window.turnstile || document.getElementById('fl-turnstile-script')) return
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script')
+      s.id = 'fl-turnstile-script'
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+      s.async = true
+      s.defer = true
+      s.onload = resolve
+      s.onerror = reject
+      document.head.appendChild(s)
+    })
+  }
+
+  function renderTurnstile(mode) {
+    if (!turnstileSiteKey) return
+    const container = qs(`#fl-turnstile-${mode}`)
+    if (!container || turnstileWidgets[mode]) return
+    loadTurnstileScript().then(() => {
+      turnstileWidgets[mode] = window.turnstile.render(container, {
+        sitekey: turnstileSiteKey,
+        theme: isDark() ? 'dark' : 'light',
+      })
+    })
+  }
+
+  function resetTurnstile(mode) {
+    if (turnstileWidgets[mode] && window.turnstile) {
+      window.turnstile.reset(turnstileWidgets[mode])
+    }
+  }
+
+  function getTurnstileToken(mode) {
+    if (!turnstileWidgets[mode]) return undefined
+    return window.turnstile?.getResponse(turnstileWidgets[mode])
+  }
+
+  // 表单提交
+  function collectFormData(form) {
+    const data = {}
+    const fd = new FormData(form)
+    fd.forEach((v, k) => {
+      if (k === 'enable_rss') { data[k] = true; return }
+      data[k] = v
+    })
+    if (!('enable_rss' in data)) data.enable_rss = false
+    return data
+  }
+
+  function bindForm(id, mode) {
+    qs(id).addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const form = e.target
+      const btn = form.querySelector('button[type="submit"]')
+      showError(mode, '')
+
+      const data = collectFormData(form)
+      if (mode === 'update' && !data.original_url) {
+        showError(mode, '请填写原站点地址')
+        return
+      }
+      if (!data.name || !data.link || !data.avatar || !data.email) {
+        showError(mode, '请填写所有必填项')
+        return
+      }
+
+      const token = getTurnstileToken(mode)
+      if (turnstileSiteKey && !token) {
+        showError(mode, '请完成人机验证')
+        return
+      }
+      if (token) data.turnstile_token = token
+
+      const path = mode === 'apply' ? '/api/public/friend/apply' : '/api/public/friend/update-apply'
+      setLoading(btn, true)
+      try {
+        const res = await apiFetch(path, { method: 'POST', body: JSON.stringify(data) })
+        qs('#fl-form-wrap').style.display = 'none'
+        qs('#fl-success').hidden = false
+        qs('#fl-success-msg').textContent = res.message || '提交成功，等待管理员审核。'
+        form.reset()
+        resetTurnstile(mode)
+        loadSubmissions()
+      } catch (err) {
+        showError(mode, err.message)
+        resetTurnstile(mode)
+      } finally {
+        setLoading(btn, false)
+      }
+    })
+  }
+  bindForm('#fl-form-apply', 'apply')
+  bindForm('#fl-form-update', 'update')
+
+  qs('#fl-continue').addEventListener('click', () => {
+    qs('#fl-success').hidden = true
+    qs('#fl-form-wrap').style.display = 'block'
+  })
+
+  // 申请列表
+  const statusNames = {
+    pending: '未审批',
+    survival: '已通过',
+    rejected: '已拒绝',
+    timeout: '超时',
+    error: '错误',
+  }
+
+  async function loadSubmissions() {
+    const status = qs('#fl-status-filter').value
+    const search = qs('#fl-status-search').value.trim()
+    const params = new URLSearchParams({ page: String(currentPage), page_size: String(PAGE_SIZE) })
+    if (status) params.set('status', status)
+    if (search) params.set('search', search)
+
+    qs('#fl-status-list').innerHTML = '<div class="fl-hint">加载中...</div>'
+    try {
+      const res = await apiFetch(`/api/public/friend/submissions?${params.toString()}`)
+      const list = res.data?.submissions || []
+      const total = res.data?.total || 0
+      totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+      qs('#fl-status-count').textContent = `共 ${total} 条`
+      qs('#fl-page-info').textContent = `${currentPage} / ${totalPages}`
+      qs('#fl-page-prev').disabled = currentPage <= 1
+      qs('#fl-page-next').disabled = currentPage >= totalPages
+      qs('#fl-pagination').hidden = totalPages <= 1
+
+      if (!list.length) {
+        qs('#fl-status-list').innerHTML = '<div class="fl-hint">暂无申请记录</div>'
+        return
+      }
+
+      qs('#fl-status-list').innerHTML = list.map((item) => `
+        <div class="fl-status-item">
+          <div>
+            <div class="fl-status-name">${escapeHtml(item.name)}</div>
+            ${item.description ? `<div class="fl-status-desc">${escapeHtml(item.description)}</div>` : ''}
+          </div>
+          <span class="fl-status-badge ${item.status}">${statusNames[item.status] || item.status}</span>
+        </div>
+      `).join('')
+    } catch (err) {
+      qs('#fl-status-list').innerHTML = `<div class="fl-hint" style="color:#ef4444;">加载失败：${escapeHtml(err.message)}</div>`
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]))
+  }
+
+  qs('#fl-status-filter').addEventListener('change', () => { currentPage = 1; loadSubmissions() })
+  qs('#fl-status-search').addEventListener('input', debounce(() => { currentPage = 1; loadSubmissions() }, 300))
+  qs('#fl-page-prev').addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadSubmissions() } })
+  qs('#fl-page-next').addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; loadSubmissions() } })
+
+  function debounce(fn, wait) {
+    let t
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait) }
+  }
+
+  // 初始化：检测 Turnstile 配置后加载列表
+  apiFetch('/api/public/verify_conf')
+    .then((res) => {
+      turnstileSiteKey = res.data?.turnstile_site_key || null
+      updateConditionUI()
+      loadSubmissions()
+    })
+    .catch(() => {
+      updateConditionUI()
+      loadSubmissions()
+    })
+})()
+</script>
+```
+
+###### 使用说明
+
+1. 将以上 CSS 放到页面样式表中（如 Hexo Butterfly 的 `source/css/link.css`），HTML 与 JavaScript 放到需要展示表单的页面模板里。
+2. 修改 `API_BASE` 为实际后端域名。
+3. 如果后端在 `system_config.json` 中启用了 Turnstile，示例会自动请求 `/api/public/verify_conf` 获取 `turnstile_site_key` 并渲染验证框；未启用时表单直接提交。
+4. 公开申请列表调用 `/api/public/friend/submissions`，仅返回去敏后的 `id`、`name`、`description`、`status`、`updated_at`，可直接在前端展示审核进度。
+5. 明暗模式依赖页面根节点或 `html` 标签上的 `data-theme="dark"`，与 Butterfly 等主题保持一致。
+
 #### 友链申请邮件通知
 
 当 `system_conf.email_conf.enable` 为 `true` 且发件邮箱 `user_name` 已填写时，系统会在以下场景自动发送邮件。发送行为还受两个开关控制：

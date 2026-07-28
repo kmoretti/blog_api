@@ -3,8 +3,9 @@ package handler
 import (
 	"blog_api/src/model"
 	friendsRepositories "blog_api/src/repositories/friend"
-	crawlerService "blog_api/src/service/crawler"
 	"blog_api/src/service"
+	crawlerService "blog_api/src/service/crawler"
+	"blog_api/src/service/fcircle"
 	"errors"
 	"log"
 	"net/http"
@@ -274,6 +275,8 @@ func (h *FriendLinkHandler) ApplyFriendLink(c *gin.Context) {
 		"status":  "pending",
 		"message": "友链申请已提交，等待管理员审核",
 	}))
+
+	fcircle.ScheduleRegenerate()
 }
 
 // UpdateApplyFriendLink handles POST /api/public/friend/update-apply.
@@ -354,6 +357,8 @@ func (h *FriendLinkHandler) UpdateApplyFriendLink(c *gin.Context) {
 		"status":       "pending",
 		"message":      "友链更新申请已提交，等待管理员审核",
 	}))
+
+	fcircle.ScheduleRegenerate()
 }
 
 // GetFriendSubmissions handles GET /api/public/friend/submissions.
