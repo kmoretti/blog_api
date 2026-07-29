@@ -772,16 +772,19 @@ const saveConfig = async () => {
     }
 
     // 一次性发送所有更新
-    await updateSystemConfig(updates)
+    const res = await updateSystemConfig(updates)
 
     // 保存成功后，更新原始配置
     originalConfig.value = JSON.parse(JSON.stringify(config.value))
 
-    ElMessage.success(`成功保存 ${updates.length} 项配置`)
-    // Sync PWA toggle state to localStorage for usePwa to read
-    localStorage.setItem('pwa_enabled', String(config.value.system_conf.pwa_conf.enable))
+    const restartRequiredKeys = res.data?.restart_required_keys || []
+    if (restartRequiredKeys.length > 0) {
+      ElMessage.warning(`成功保存 ${updates.length} 项配置；${restartRequiredKeys.length} 项需重启后完全生效`)
+    } else {
+      ElMessage.success(`成功保存 ${updates.length} 项配置，已刷新运行时配置`)
+    }
 
-    // Guide user to refresh for PWA activation
+    localStorage.setItem('pwa_enabled', String(config.value.system_conf.pwa_conf.enable))
     if (config.value.system_conf.pwa_conf.enable) {
       ElMessage.success('PWA 已启用，刷新页面后即可安装应用')
     }

@@ -18,12 +18,15 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(http.StatusBadRequest, "无效的请求体,请传入一个数组: "+err.Error()))
 		return
 	}
-	if err := config.UpdateAndSaveConfigs(req); err != nil {
+	result, err := config.UpdateAndSaveConfigs(req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(http.StatusInternalServerError, "更新配置失败: "+err.Error()))
 		return
 	}
 
 	c.JSON(http.StatusOK, model.NewSuccessResponse(gin.H{
-		"message": "配置更新成功，重启服务后生效",
+		"message":               "配置更新成功，已刷新运行时配置",
+		"reloaded":              result.Reloaded,
+		"restart_required_keys": result.RestartRequiredKeys,
 	}))
 }

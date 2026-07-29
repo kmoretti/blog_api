@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/spf13/viper"
 )
@@ -20,35 +21,86 @@ import (
 var defaultConfigFiles embed.FS
 
 var (
-	globalConfig *model.Config
-	loadErr      error
-	once         sync.Once
-	v            *viper.Viper // 全局 viper 实例
+	currentConfig atomic.Pointer[model.Config]
+	loadErr       error
+	once          sync.Once
+	reloadMu      sync.Mutex
+	updateMu      sync.Mutex
 )
 
-func Load() (*model.Config, error) {
-	once.Do(func() {
-		globalConfig, loadErr = loadConfig()
-	})
-	return globalConfig, loadErr
+// UpdateResult describes the runtime effects of a persisted config update.
+//
+// Reloaded is true when the in-memory snapshot was atomically replaced.
+// RestartRequiredKeys contains accepted update keys whose full effect still
+// depends on startup-only resources such as listeners, cron jobs, or clients.
+type UpdateResult struct {
+	Reloaded            bool     `json:"reloaded"`
+	RestartRequiredKeys []string `json:"restart_required_keys"`
 }
 
+// Load initializes the global configuration snapshot once.
+//
+// It releases missing default JSON files, reads .env and JSON config files,
+// applies environment overrides, and publishes the resulting immutable snapshot
+// for GetConfig. After the first successful call, use Reload to publish a new
+// snapshot.
+func Load() (*model.Config, error) {
+	once.Do(func() {
+		reloadMu.Lock()
+		defer reloadMu.Unlock()
+
+		var cfg *model.Config
+		cfg, loadErr = loadConfig()
+		if loadErr == nil {
+			currentConfig.Store(cfg)
+		}
+	})
+	reloadMu.Lock()
+	defer reloadMu.Unlock()
+	return currentConfig.Load(), loadErr
+}
+
+// GetConfig returns the currently published configuration snapshot.
+//
+// Callers must treat the returned Config as read-only. A later Reload can
+// atomically publish a different snapshot, but the returned pointer remains
+// valid for the caller that already acquired it.
 func GetConfig() *model.Config {
-	if globalConfig == nil {
+	cfg := currentConfig.Load()
+	if cfg == nil {
 		log.Fatal("配置未初始化,请先调用 Load()")
 	}
-	return globalConfig
+	return cfg
+}
+
+// ReplaceConfig swaps the published configuration snapshot and returns a
+// restore function. Intended for tests that need a temporary config.
+func ReplaceConfig(cfg *model.Config) func() {
+	previous := currentConfig.Swap(cfg)
+	return func() {
+		currentConfig.Store(previous)
+	}
+}
+
+// Reload reads config files again and atomically publishes the new snapshot.
+//
+// If loading fails, the previous snapshot remains active and the error is
+// returned to the caller.
+func Reload() (*model.Config, error) {
+	reloadMu.Lock()
+	defer reloadMu.Unlock()
+
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
+	currentConfig.Store(cfg)
+	loadErr = nil
+	return cfg, nil
 }
 
 func loadConfig() (*model.Config, error) {
-	v = viper.New()
-	v.SetDefault("CRON_SCAN_ON_STARTUP", true)
-	v.SetDefault("system_conf.email_conf.friend_link_user_notify", false)
-	v.SetDefault("system_conf.email_conf.friend_link_admin_notify", true)
-	v.SetConfigFile(".env")
-	v.SetConfigType("env")
-	v.AutomaticEnv()                                   // 自动读取匹配的环境变量
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_")) // 将配置键中的'.'替换为'_'以匹配环境变量
+	v := newConfigReader()
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok || errors.Is(err, os.ErrNotExist) {
@@ -65,18 +117,28 @@ func loadConfig() (*model.Config, error) {
 	if err := ensureDefaultConfigFiles(configPath); err != nil {
 		return nil, err
 	}
-	if err := mergeJSONConfig("system_config", configPath); err != nil {
+	if err := mergeJSONConfig(v, "system_config", configPath); err != nil {
 		return nil, err
 	}
-	if err := mergeJSONConfig("friend_list", configPath); err != nil {
+	if err := mergeJSONConfig(v, "friend_list", configPath); err != nil {
 		return nil, err
 	}
 	cfg := &model.Config{}
-	if err := unmarshalConfig(cfg); err != nil {
+	if err := unmarshalConfig(v, cfg); err != nil {
 		return nil, fmt.Errorf("解析配置到结构体失败: %w", err)
 	}
 
 	return cfg, nil
+}
+
+func newConfigReader() *viper.Viper {
+	v := viper.New()
+	v.SetDefault("CRON_SCAN_ON_STARTUP", true)
+	v.SetConfigFile(".env")
+	v.SetConfigType("env")
+	v.AutomaticEnv()
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	return v
 }
 
 func ensureDefaultConfigFiles(configPath string) error {
@@ -115,7 +177,7 @@ func ensureDefaultConfigFiles(configPath string) error {
 }
 
 // mergeJSONConfig 合并指定的 JSON 配置文件
-func mergeJSONConfig(configName, configPath string) error {
+func mergeJSONConfig(v *viper.Viper, configName, configPath string) error {
 	v.SetConfigName(configName)
 	v.SetConfigType("json")
 	v.AddConfigPath(configPath)
@@ -131,7 +193,7 @@ func mergeJSONConfig(configName, configPath string) error {
 }
 
 // unmarshalConfig 将 viper 配置解析到 Config 结构体
-func unmarshalConfig(cfg *model.Config) error {
+func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 	cfg.Port = v.GetString("PORT")
 	cfg.ListenAddress = v.GetString("LISTEN_ADDRESS")
 	cfg.WebPanelUser = v.GetString("WEB_PANEL_USER")
@@ -223,11 +285,19 @@ func parseEnvBool(val string) bool {
 	}
 }
 
-// UpdateAndSaveConfigs 批量更新并保存配置到 system_config.json
-func UpdateAndSaveConfigs(updates []model.UpdateConfigReq) error {
+// UpdateAndSaveConfigs persists supported config updates and reloads config.
+//
+// Only keys under system_conf are accepted. Unsupported or invalid keys are
+// skipped for backward compatibility. On write success, the function reloads
+// the global snapshot. If reload fails, the previous snapshot remains active and
+// the previous file content is restored when possible.
+func UpdateAndSaveConfigs(updates []model.UpdateConfigReq) (*UpdateResult, error) {
+	updateMu.Lock()
+	defer updateMu.Unlock()
+
 	configPath := GetConfig().ConfigPath
 	if configPath == "" {
-		return fmt.Errorf("配置路径未设置")
+		return nil, fmt.Errorf("配置路径未设置")
 	}
 	filePath := filepath.Join(configPath, "system_config.json")
 
@@ -236,12 +306,12 @@ func UpdateAndSaveConfigs(updates []model.UpdateConfigReq) error {
 		if os.IsNotExist(err) {
 			existingData = []byte("{}")
 		} else {
-			return fmt.Errorf("读取现有配置文件失败: %w", err)
+			return nil, fmt.Errorf("读取现有配置文件失败: %w", err)
 		}
 	}
 	var existingConfig map[string]interface{}
 	if err := json.Unmarshal(existingData, &existingConfig); err != nil {
-		return fmt.Errorf("解析现有配置失败: %w", err)
+		return nil, fmt.Errorf("解析现有配置失败: %w", err)
 	}
 	for _, update := range updates {
 		if !strings.HasPrefix(update.Key, "system_conf.") {
@@ -270,11 +340,77 @@ func UpdateAndSaveConfigs(updates []model.UpdateConfigReq) error {
 	}
 	jsonData, err := json.MarshalIndent(existingConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
+		return nil, fmt.Errorf("序列化配置失败: %w", err)
 	}
-	if err := os.WriteFile(filePath, jsonData, 0644); err != nil {
-		return fmt.Errorf("写入 system_config.json 失败: %w", err)
+	if err := writeFileAtomic(filePath, jsonData, 0o644); err != nil {
+		return nil, fmt.Errorf("写入 system_config.json 失败: %w", err)
 	}
 
+	if _, err := Reload(); err != nil {
+		if restoreErr := writeFileAtomic(filePath, existingData, 0o644); restoreErr != nil {
+			return nil, fmt.Errorf("刷新配置失败: %w; 恢复旧配置失败: %v", err, restoreErr)
+		}
+		return nil, fmt.Errorf("刷新配置失败: %w", err)
+	}
+
+	return &UpdateResult{
+		Reloaded:            true,
+		RestartRequiredKeys: restartRequiredKeys(updates),
+	}, nil
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".system_config-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	committed = true
 	return nil
+}
+
+func restartRequiredKeys(updates []model.UpdateConfigReq) []string {
+	restartPrefixes := []string{
+		"system_conf.data_conf.database.path",
+		"system_conf.data_conf.image.path",
+		"system_conf.data_conf.image.conv_to",
+		"system_conf.moments_integrated_conf",
+		"system_conf.oss_conf",
+	}
+
+	seen := make(map[string]bool, len(updates))
+	keys := make([]string, 0)
+	for _, update := range updates {
+		for _, prefix := range restartPrefixes {
+			if update.Key == prefix || strings.HasPrefix(update.Key, prefix+".") {
+				if !seen[update.Key] {
+					seen[update.Key] = true
+					keys = append(keys, update.Key)
+				}
+				break
+			}
+		}
+	}
+	return keys
 }

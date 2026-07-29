@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"blog_api/src/config"
 	"blog_api/src/model"
 	"net/http"
 	"os"
@@ -13,13 +14,14 @@ import (
 
 var statFile = os.Stat
 
-func staticFileHandler(cfg *model.Config) gin.HandlerFunc {
-	baseDir := resolveStaticBaseDir(cfg)
-	panelDir := resolvePanelDir()
-	absBaseDir, _ := filepath.Abs(baseDir)
-	absPanelDir, _ := filepath.Abs(panelDir)
-
+func staticFileHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		currentCfg := config.GetConfig()
+		baseDir := resolveStaticBaseDir(currentCfg)
+		panelDir := resolvePanelDir()
+		absBaseDir, _ := filepath.Abs(baseDir)
+		absPanelDir, _ := filepath.Abs(panelDir)
+
 		reqPath, ok := normalizeRequestPath(c.Request.URL.Path)
 		if !ok {
 			c.String(http.StatusBadRequest, "Bad Request")
@@ -31,7 +33,7 @@ func staticFileHandler(cfg *model.Config) gin.HandlerFunc {
 			return
 		}
 
-		for _, excludedPath := range cfg.Safe.ExcludePaths {
+		for _, excludedPath := range currentCfg.Safe.ExcludePaths {
 			normalizedExclude, valid := normalizeRequestPath(excludedPath)
 			if !valid || normalizedExclude == "/" {
 				continue
@@ -43,7 +45,7 @@ func staticFileHandler(cfg *model.Config) gin.HandlerFunc {
 			}
 		}
 
-		if isProtectedDatabasePath(reqPath, cfg.Data.Database.Path, absBaseDir) {
+		if isProtectedDatabasePath(reqPath, currentCfg.Data.Database.Path, absBaseDir) {
 			c.String(http.StatusForbidden, "Forbidden")
 			return
 		}

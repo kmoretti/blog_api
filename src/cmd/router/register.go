@@ -33,7 +33,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		DatabasePath: cfg.Data.Database.Path,
 	}
 	imageHandler := &handlerAction.ImageHandler{DB: db}
-	resourceHandler := handlerAction.NewResourceHandler(cfg, ossService)
+	resourceHandler := handlerAction.NewResourceHandler(ossService)
 	imagePublicHandler := handler.NewImagePublicHandler(db)
 	verifyPublicHandler := &authHandler.VerifyPublicHandler{}
 	momentHandler := &handler.MomentHandler{DB: db}

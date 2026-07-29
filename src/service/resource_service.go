@@ -1,6 +1,7 @@
 package service
 
 import (
+	"blog_api/src/config"
 	"blog_api/src/model"
 	"errors"
 	"fmt"
@@ -11,9 +12,9 @@ import (
 	"strings"
 )
 
-// ResourceService 提供了处理资源（如文件上传）的服务。
+// ResourceService handles local resource reads, writes, and deletes.
 type ResourceService struct {
-	config *model.Config
+	configProvider func() *model.Config
 }
 
 var (
@@ -22,9 +23,35 @@ var (
 	ErrResourceNotFound    = errors.New("resource not found")
 )
 
-// NewResourceService 创建一个新的 ResourceService 实例。
+// NewResourceService creates a ResourceService backed by a fixed config snapshot.
+//
+// Use NewDynamicResourceService for request handlers that must observe runtime
+// config reloads.
 func NewResourceService(cfg *model.Config) *ResourceService {
-	return &ResourceService{config: cfg}
+	return &ResourceService{
+		configProvider: func() *model.Config {
+			return cfg
+		},
+	}
+}
+
+// NewDynamicResourceService creates a ResourceService backed by live config.
+//
+// Each operation reads the latest published config snapshot before resolving
+// resource paths and safety rules.
+func NewDynamicResourceService() *ResourceService {
+	return &ResourceService{configProvider: config.GetConfig}
+}
+
+func (s *ResourceService) currentConfig() *model.Config {
+	if s.configProvider == nil {
+		return &model.Config{}
+	}
+	cfg := s.configProvider()
+	if cfg == nil {
+		return &model.Config{}
+	}
+	return cfg
 }
 
 // SaveFile 保存上传的文件。
@@ -41,7 +68,8 @@ func (s *ResourceService) SaveFile(file *multipart.FileHeader, subPath string, o
 
 // SaveReader streams a resource into local storage.
 func (s *ResourceService) SaveReader(filename string, src io.Reader, subPath string, overwrite bool) (string, string, error) {
-	filePath, urlPath, err := s.prepareSavePath(filename, subPath, overwrite)
+	cfg := s.currentConfig()
+	filePath, urlPath, err := s.prepareSavePath(cfg, filename, subPath, overwrite)
 	if err != nil {
 		return "", "", err
 	}
@@ -76,9 +104,9 @@ func (s *ResourceService) SaveReader(filename string, src io.Reader, subPath str
 	return filePath, urlPath, nil
 }
 
-func (s *ResourceService) prepareSavePath(filename, subPath string, overwrite bool) (string, string, error) {
+func (s *ResourceService) prepareSavePath(cfg *model.Config, filename, subPath string, overwrite bool) (string, string, error) {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filename), "."))
-	if !s.isExtensionAllowed(ext) {
+	if !s.isExtensionAllowed(cfg, ext) {
 		return "", "", fmt.Errorf("文件类型 '%s' 不被允许", ext)
 	}
 
@@ -88,7 +116,7 @@ func (s *ResourceService) prepareSavePath(filename, subPath string, overwrite bo
 		return "", "", fmt.Errorf("无效的路径")
 	}
 
-	basePath := s.config.Data.Resource.Path
+	basePath := cfg.Data.Resource.Path
 	if basePath == "" {
 		basePath = "data/" // 默认路径
 	}
@@ -119,8 +147,8 @@ func (s *ResourceService) prepareSavePath(filename, subPath string, overwrite bo
 }
 
 // isExtensionAllowed 检查文件扩展名是否在白名单中。
-func (s *ResourceService) isExtensionAllowed(ext string) bool {
-	for _, allowedExt := range s.config.Safe.AllowExtension {
+func (s *ResourceService) isExtensionAllowed(cfg *model.Config, ext string) bool {
+	for _, allowedExt := range cfg.Safe.AllowExtension {
 		if ext == allowedExt {
 			return true
 		}
@@ -152,8 +180,10 @@ func (s *ResourceService) findUniqueFilename(dir, filename string) string {
 // DeleteFile 删除指定路径的文件。
 // 在删除前会进行严格的安全检查，以防止删除受保护的文件。
 func (s *ResourceService) DeleteFile(filePath string) error {
+	cfg := s.currentConfig()
+
 	// 1. 解析资源根目录（通常是 data），删除目标必须位于该目录内
-	basePath := s.config.Data.Resource.Path
+	basePath := cfg.Data.Resource.Path
 	if basePath == "" {
 		basePath = "data/"
 	}
@@ -179,7 +209,7 @@ func (s *ResourceService) DeleteFile(filePath string) error {
 	}
 
 	// 2. 检查路径是否在受保护的目录内
-	for _, protectedPath := range s.config.Safe.ExcludePaths {
+	for _, protectedPath := range cfg.Safe.ExcludePaths {
 		isProtected := false
 		candidates := []string{}
 
@@ -228,13 +258,15 @@ func (s *ResourceService) DeleteFile(filePath string) error {
 // 如果路径指向目录，它将返回一个包含目录内容的 FileInfo 切片。
 // 如果路径不存在，则返回错误。
 func (s *ResourceService) GetFileOrDir(relativePath string) (string, []model.FileInfo, error) {
+	cfg := s.currentConfig()
+
 	// 清理路径以防止路径遍历
 	cleanPath := filepath.Clean(relativePath)
 	if strings.HasPrefix(cleanPath, "..") {
 		return "", nil, fmt.Errorf("无效的路径")
 	}
 
-	basePath := s.config.Data.Resource.Path
+	basePath := cfg.Data.Resource.Path
 	if basePath == "" {
 		basePath = "data/" // 默认路径
 	}

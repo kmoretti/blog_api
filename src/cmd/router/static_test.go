@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"blog_api/src/config"
 	"blog_api/src/model"
 	"errors"
 	"net/http"
@@ -136,14 +137,17 @@ func TestStaticFileHandlerProtectsNestedDatabaseAndSidecars(t *testing.T) {
 	}
 }
 
-func performStaticRequest(t *testing.T, config *model.Config, requestPath string) *httptest.ResponseRecorder {
+func performStaticRequest(t *testing.T, cfg *model.Config, requestPath string) *httptest.ResponseRecorder {
 	t.Helper()
+	restore := config.ReplaceConfig(cfg)
+	t.Cleanup(restore)
+
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
 	engine := gin.New()
 	engine.RedirectTrailingSlash = false
 	engine.RedirectFixedPath = false
-	engine.NoRoute(staticFileHandler(config))
+	engine.NoRoute(staticFileHandler())
 	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://example.com"+requestPath, nil))
 	return recorder
 }

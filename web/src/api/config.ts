@@ -4,6 +4,12 @@ import type { ApiResponse } from '@/model/response';
 
 const CONFIG_FILE_PATH = '/config/system_config.json';
 
+export interface UpdateConfigResult {
+  message: string;
+  reloaded: boolean;
+  restart_required_keys: string[];
+}
+
 /**
  * 获取系统配置
  * 注意：资源 API 直接返回文件内容，不包装在 ApiResponse 中
@@ -24,7 +30,7 @@ export const getSystemConfig = () => {
  * @returns
  */
 export const updateSystemConfig = (updates: { key: string; value: any }[]) => {
-  return request.put<any, ApiResponse<{ message: string }>>('/action/config', updates);
+  return request.put<any, ApiResponse<UpdateConfigResult>>('/action/config', updates);
 };
 
 /**

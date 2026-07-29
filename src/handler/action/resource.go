@@ -26,16 +26,16 @@ func uploadErrorStatus(err error) int {
 	return http.StatusBadRequest
 }
 
-// ResourceHandler 封装了处理资源相关请求的逻辑。
+// ResourceHandler handles resource management requests.
 type ResourceHandler struct {
 	resourceService *service.ResourceService
 	ossService      oss.OSSService
 }
 
-// NewResourceHandler 创建一个新的 ResourceHandler 实例。
-func NewResourceHandler(cfg *model.Config, ossService oss.OSSService) *ResourceHandler {
+// NewResourceHandler creates a ResourceHandler using live request-time config.
+func NewResourceHandler(ossService oss.OSSService) *ResourceHandler {
 	return &ResourceHandler{
-		resourceService: service.NewResourceService(cfg),
+		resourceService: service.NewDynamicResourceService(),
 		ossService:      ossService,
 	}
 }
