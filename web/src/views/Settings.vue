@@ -194,6 +194,28 @@
                   收到新的友链申请时向管理员发送邮件通知。默认开启。
                 </div>
               </el-form-item>
+
+              <el-divider content-position="left">发送测试邮件</el-divider>
+              <el-form-item label="收件人邮箱">
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                  <el-input
+                    v-model="testEmailTo"
+                    placeholder="输入接收测试邮件的邮箱"
+                    style="width: 280px"
+                  />
+                  <el-button
+                    type="primary"
+                    :loading="testingEmail"
+                    :disabled="!config.system_conf.email_conf.enable"
+                    @click="handleTestEmail"
+                  >
+                    发送测试邮件
+                  </el-button>
+                </div>
+                <div class="form-item-help">
+                  使用当前表单中的邮件配置（无需先保存）发送一封测试邮件，用于验证 SMTP 是否正常。
+                </div>
+              </el-form-item>
             </template>
           </el-form>
         </el-tab-pane>
@@ -546,7 +568,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile, UploadInstance } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import { getSystemConfig, restartSystem, updateSystemConfig } from '@/api/config'
+import { getSystemConfig, restartSystem, testEmailConfig, updateSystemConfig } from '@/api/config'
 import type { SystemConfig } from '@/model/config'
 import { usePwa } from '@/composables/usePwa'
 import {
@@ -663,6 +685,9 @@ const config = ref<SystemConfig>({
   }
 })
 
+const testEmailTo = ref('')
+const testingEmail = ref(false)
+
 onMounted(async () => {
   try {
     const res = await getSystemConfig()
@@ -775,6 +800,32 @@ const removeMomentsArrayItem = (
   index: number
 ) => {
   config.value.system_conf.moments_integrated_conf.integrated[target][field].splice(index, 1)
+}
+
+const handleTestEmail = async () => {
+  const emailConf = config.value.system_conf.email_conf
+  if (!emailConf.enable) {
+    ElMessage.warning('请先启用邮件')
+    return
+  }
+  if (!emailConf.host || !emailConf.user_name) {
+    ElMessage.warning('请填写 SMTP Host 和用户名')
+    return
+  }
+  if (!testEmailTo.value) {
+    ElMessage.warning('请输入接收测试邮件的邮箱')
+    return
+  }
+
+  testingEmail.value = true
+  try {
+    const res = await testEmailConfig(testEmailTo.value, emailConf)
+    ElMessage.success(res.message || '测试邮件已发送')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '测试邮件发送失败')
+  } finally {
+    testingEmail.value = false
+  }
 }
 
 const saveConfig = async () => {

@@ -1,5 +1,5 @@
 import request from '@/utils/request';
-import type { SystemConfig } from '@/model/config';
+import type { SystemConfig, EmailConfig } from '@/model/config';
 import type { ApiResponse } from '@/model/response';
 
 const CONFIG_FILE_PATH = '/config/system_config.json';
@@ -31,6 +31,16 @@ export const getSystemConfig = () => {
  */
 export const updateSystemConfig = (updates: { key: string; value: any }[]) => {
   return request.put<any, ApiResponse<UpdateConfigResult>>('/action/config', updates);
+};
+
+/**
+ * 使用当前邮件配置发送测试邮件。
+ */
+export const testEmailConfig = (to: string, emailConf: EmailConfig) => {
+  return request.post<any, ApiResponse<{ message: string }>>('/action/email/test', {
+    to,
+    email_conf: emailConf,
+  });
 };
 
 /**
