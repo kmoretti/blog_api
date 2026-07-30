@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,11 +22,13 @@ import (
 // ExportDataDir writes the contents of dataDir into w as a zip archive.
 func ExportDataDir(dataDir string, w io.Writer) (err error) {
 	zw := zip.NewWriter(w)
+	fileCount := 0
 	defer func() {
 		cerr := zw.Close()
 		if err == nil {
 			err = cerr
 		}
+		log.Printf("[backup] exported %d files from %s", fileCount, dataDir)
 	}()
 
 	err = filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
@@ -63,8 +66,12 @@ func ExportDataDir(dataDir string, w io.Writer) (err error) {
 			return err
 		}
 		defer f.Close()
-		_, err = io.Copy(fw, f)
-		return err
+		if _, err := io.Copy(fw, f); err != nil {
+			return err
+		}
+		fileCount++
+		log.Printf("[backup] packed %s", zipName)
+		return nil
 	})
 	return err
 }
@@ -208,6 +215,7 @@ func extractZip(zr *zip.Reader, dst string) error {
 	if err != nil {
 		return err
 	}
+	fileCount := 0
 	for _, f := range zr.File {
 		target := filepath.Join(dstAbs, filepath.FromSlash(f.Name))
 		target = filepath.Clean(target)
@@ -239,7 +247,10 @@ func extractZip(zr *zip.Reader, dst string) error {
 		if err != nil {
 			return err
 		}
+		fileCount++
+		log.Printf("[backup] extracted %s", f.Name)
 	}
+	log.Printf("[backup] extracted %d files to %s", fileCount, dst)
 	return nil
 }
 

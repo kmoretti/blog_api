@@ -27,11 +27,12 @@ type Handler struct {
 
 // ExportFullBackup streams a zip of the data directory.
 func (h *Handler) ExportFullBackup(c *gin.Context) {
+	log.Printf("[backup] starting full export from dataDir=%s databasePath=%s", h.DataDir, h.DatabasePath)
 	filename := backupSvc.BackupFilename("blog_api_backup")
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	if err := backupSvc.ExportDataDir(h.DataDir, c.Writer); err != nil {
-		log.Printf("[backup] export failed: %v", err)
+		log.Printf("[backup] export failed from %s: %v", h.DataDir, err)
 		// headers already sent; cannot change status
 		return
 	}
