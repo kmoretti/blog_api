@@ -15,6 +15,7 @@ import (
 
 	"blog_api/src/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // ExportDataDir writes the contents of dataDir into w as a zip archive.
@@ -304,4 +305,142 @@ func exportFriendRss(db *gorm.DB) (*model.ExportEnvelope, error) {
 			"friend_rss_post": posts,
 		},
 	}, nil
+}
+
+// ImportModule imports a module from an ExportEnvelope using the given strategy.
+func ImportModule(db *gorm.DB, module string, env *model.ExportEnvelope, strategy string, dataDir string) (*model.ImportResult, error) {
+	if env.Module != module {
+		return nil, fmt.Errorf("module mismatch: expected %s, got %s", module, env.Module)
+	}
+	switch strategy {
+	case "replace", "skip":
+	default:
+		strategy = "replace"
+	}
+
+	switch module {
+	case "system_config":
+		return importSystemConfig(env, dataDir)
+	case "friend_links":
+		return importFriendLinks(db, env, strategy)
+	case "moments":
+		return importMoments(db, env, strategy)
+	case "friend_rss":
+		return importFriendRss(db, env, strategy)
+	case "images":
+		return importImages(db, env, strategy)
+	default:
+		return nil, fmt.Errorf("unknown module: %s", module)
+	}
+}
+
+func importSystemConfig(env *model.ExportEnvelope, dataDir string) (*model.ImportResult, error) {
+	cfg, ok := env.Items.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid system_config export format")
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(dataDir, "config", "system_config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return nil, err
+	}
+	return &model.ImportResult{Imported: 1}, nil
+}
+
+func importFriendLinks(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*model.ImportResult, error) {
+	data, err := json.Marshal(env.Items)
+	if err != nil {
+		return nil, err
+	}
+	var items []model.FriendWebsite
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+	return bulkCreate(db, items, strategy)
+}
+
+func importImages(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*model.ImportResult, error) {
+	data, err := json.Marshal(env.Items)
+	if err != nil {
+		return nil, err
+	}
+	var items []model.Image
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+	return bulkCreate(db, items, strategy)
+}
+
+func importMoments(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*model.ImportResult, error) {
+	type momentExport struct {
+		Moments      []model.Moment      `json:"moments"`
+		MomentsMedia []model.MomentMedia `json:"moments_media"`
+	}
+	data, err := json.Marshal(env.Items)
+	if err != nil {
+		return nil, err
+	}
+	var payload momentExport
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	momentsResult, err := bulkCreate(db, payload.Moments, strategy)
+	if err != nil {
+		return nil, err
+	}
+	mediaResult, err := bulkCreate(db, payload.MomentsMedia, strategy)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ImportResult{
+		Imported: momentsResult.Imported + mediaResult.Imported,
+	}, nil
+}
+
+func importFriendRss(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*model.ImportResult, error) {
+	type rssExport struct {
+		FriendRss []model.FriendRss `json:"friend_rss"`
+		RssPosts  []model.RssPost   `json:"friend_rss_post"`
+	}
+	data, err := json.Marshal(env.Items)
+	if err != nil {
+		return nil, err
+	}
+	var payload rssExport
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+	feedsResult, err := bulkCreate(db, payload.FriendRss, strategy)
+	if err != nil {
+		return nil, err
+	}
+	postsResult, err := bulkCreate(db, payload.RssPosts, strategy)
+	if err != nil {
+		return nil, err
+	}
+	return &model.ImportResult{
+		Imported: feedsResult.Imported + postsResult.Imported,
+	}, nil
+}
+
+func bulkCreate(db *gorm.DB, items interface{}, strategy string) (*model.ImportResult, error) {
+	v := reflect.ValueOf(items)
+	if v.Kind() != reflect.Slice || v.Len() == 0 {
+		return &model.ImportResult{}, nil
+	}
+	onConflict := clause.OnConflict{UpdateAll: true}
+	if strategy == "skip" {
+		onConflict = clause.OnConflict{DoNothing: true}
+	}
+	result := db.Clauses(onConflict).CreateInBatches(items, 100)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &model.ImportResult{Imported: int(result.RowsAffected)}, nil
 }

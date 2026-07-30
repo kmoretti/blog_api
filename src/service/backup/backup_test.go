@@ -165,7 +165,8 @@ func TestExportModuleSystemConfig(t *testing.T) {
 }
 
 func newTestDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,5 +281,39 @@ func TestExportModuleFriendRss(t *testing.T) {
 	}
 	if _, ok := items["friend_rss_post"]; !ok {
 		t.Error("expected items to contain friend_rss_post")
+	}
+}
+
+func TestImportModuleFriendLinks(t *testing.T) {
+	db := newTestDB(t)
+	tmp := t.TempDir()
+
+	// Insert initial link
+	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"})
+
+	// Export
+	env, err := ExportModule(db, "friend_links", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutate
+	db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed")
+
+	// Import with replace
+	res, err := ImportModule(db, "friend_links", env, "replace", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 1 {
+		t.Fatalf("expected 1 imported, got %d", res.Imported)
+	}
+
+	var link model.FriendWebsite
+	if err := db.First(&link, 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if link.Name != "A" {
+		t.Fatalf("expected name A after replace, got %s", link.Name)
 	}
 }
