@@ -317,3 +317,148 @@ func TestImportModuleFriendLinks(t *testing.T) {
 		t.Fatalf("expected name A after replace, got %s", link.Name)
 	}
 }
+
+func TestImportModuleFriendLinksSkip(t *testing.T) {
+	db := newTestDB(t)
+	tmp := t.TempDir()
+
+	// Insert initial link
+	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"})
+
+	// Export
+	env, err := ExportModule(db, "friend_links", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutate
+	db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed")
+
+	// Import with skip
+	res, err := ImportModule(db, "friend_links", env, "skip", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 0 {
+		t.Fatalf("expected 0 imported, got %d", res.Imported)
+	}
+	if res.Skipped != 1 {
+		t.Fatalf("expected 1 skipped, got %d", res.Skipped)
+	}
+
+	var link model.FriendWebsite
+	if err := db.First(&link, 1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if link.Name != "Changed" {
+		t.Fatalf("expected name unchanged after skip, got %s", link.Name)
+	}
+}
+
+func TestImportModuleSystemConfig(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "system_config.json"), []byte(`{"site":"old"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Export
+	env, err := ExportModule(nil, "system_config", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Replace
+	res, err := ImportModule(nil, "system_config", env, "replace", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 1 {
+		t.Fatalf("expected 1 imported, got %d", res.Imported)
+	}
+	data, err := os.ReadFile(filepath.Join(cfgDir, "system_config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"site": "old"`) {
+		t.Fatalf("expected replaced config to contain old site, got %s", string(data))
+	}
+
+	// Skip
+	res, err = ImportModule(nil, "system_config", env, "skip", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Skipped != 1 {
+		t.Fatalf("expected 1 skipped, got %d", res.Skipped)
+	}
+}
+
+func TestImportModuleMoments(t *testing.T) {
+	db := newTestDB(t)
+	tmp := t.TempDir()
+
+	moment := model.Moment{Content: "hello"}
+	if err := db.Create(&moment).Error; err != nil {
+		t.Fatal(err)
+	}
+	media := model.MomentMedia{MomentID: moment.ID, MediaURL: "https://example.com/img.png", MediaType: "image"}
+	if err := db.Create(&media).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// Export
+	env, err := ExportModule(db, "moments", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear database
+	db.Where("1 = 1").Delete(&model.MomentMedia{})
+	db.Where("1 = 1").Delete(&model.Moment{})
+
+	// Import with replace
+	res, err := ImportModule(db, "moments", env, "replace", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Imported != 2 {
+		t.Fatalf("expected 2 imported, got %d", res.Imported)
+	}
+
+	var importedMoments []model.Moment
+	if err := db.Find(&importedMoments).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(importedMoments) != 1 {
+		t.Fatalf("expected 1 moment, got %d", len(importedMoments))
+	}
+
+	var importedMedia []model.MomentMedia
+	if err := db.Find(&importedMedia).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(importedMedia) != 1 {
+		t.Fatalf("expected 1 media, got %d", len(importedMedia))
+	}
+}
+
+func TestImportModuleInvalidStrategy(t *testing.T) {
+	db := newTestDB(t)
+	tmp := t.TempDir()
+	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test"})
+	env, err := ExportModule(db, "friend_links", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ImportModule(db, "friend_links", env, "merge", tmp)
+	if err == nil {
+		t.Fatal("expected error for invalid strategy")
+	}
+	if !strings.Contains(err.Error(), "invalid import strategy") {
+		t.Fatalf("expected invalid import strategy error, got %v", err)
+	}
+}

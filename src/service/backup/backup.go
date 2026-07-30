@@ -315,12 +315,12 @@ func ImportModule(db *gorm.DB, module string, env *model.ExportEnvelope, strateg
 	switch strategy {
 	case "replace", "skip":
 	default:
-		strategy = "replace"
+		return nil, fmt.Errorf("invalid import strategy: %s", strategy)
 	}
 
 	switch module {
 	case "system_config":
-		return importSystemConfig(env, dataDir)
+		return importSystemConfig(env, dataDir, strategy)
 	case "friend_links":
 		return importFriendLinks(db, env, strategy)
 	case "moments":
@@ -334,7 +334,7 @@ func ImportModule(db *gorm.DB, module string, env *model.ExportEnvelope, strateg
 	}
 }
 
-func importSystemConfig(env *model.ExportEnvelope, dataDir string) (*model.ImportResult, error) {
+func importSystemConfig(env *model.ExportEnvelope, dataDir string, strategy string) (*model.ImportResult, error) {
 	cfg, ok := env.Items.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid system_config export format")
@@ -346,6 +346,13 @@ func importSystemConfig(env *model.ExportEnvelope, dataDir string) (*model.Impor
 	path := filepath.Join(dataDir, "config", "system_config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
+	}
+	if strategy == "skip" {
+		if _, err := os.Stat(path); err == nil {
+			return &model.ImportResult{Skipped: 1}, nil
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
 	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return nil, err
@@ -390,16 +397,23 @@ func importMoments(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*mo
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
-	momentsResult, err := bulkCreate(db, payload.Moments, strategy)
-	if err != nil {
-		return nil, err
-	}
-	mediaResult, err := bulkCreate(db, payload.MomentsMedia, strategy)
+	var momentsResult, mediaResult *model.ImportResult
+	err = db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		momentsResult, err = bulkCreate(tx, payload.Moments, strategy)
+		if err != nil {
+			return err
+		}
+		mediaResult, err = bulkCreate(tx, payload.MomentsMedia, strategy)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	return &model.ImportResult{
 		Imported: momentsResult.Imported + mediaResult.Imported,
+		Skipped:  momentsResult.Skipped + mediaResult.Skipped,
+		Replaced: momentsResult.Replaced + mediaResult.Replaced,
 	}, nil
 }
 
@@ -416,16 +430,23 @@ func importFriendRss(db *gorm.DB, env *model.ExportEnvelope, strategy string) (*
 	if err := json.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
-	feedsResult, err := bulkCreate(db, payload.FriendRss, strategy)
-	if err != nil {
-		return nil, err
-	}
-	postsResult, err := bulkCreate(db, payload.RssPosts, strategy)
+	var feedsResult, postsResult *model.ImportResult
+	err = db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		feedsResult, err = bulkCreate(tx, payload.FriendRss, strategy)
+		if err != nil {
+			return err
+		}
+		postsResult, err = bulkCreate(tx, payload.RssPosts, strategy)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	return &model.ImportResult{
 		Imported: feedsResult.Imported + postsResult.Imported,
+		Skipped:  feedsResult.Skipped + postsResult.Skipped,
+		Replaced: feedsResult.Replaced + postsResult.Replaced,
 	}, nil
 }
 
@@ -442,5 +463,23 @@ func bulkCreate(db *gorm.DB, items interface{}, strategy string) (*model.ImportR
 	if result.Error != nil {
 		return nil, result.Error
 	}
-	return &model.ImportResult{Imported: int(result.RowsAffected)}, nil
+
+	n := v.Len()
+	rowsAffected := int(result.RowsAffected)
+	switch strategy {
+	case "replace":
+		replaced := rowsAffected - n
+		if replaced < 0 {
+			replaced = 0
+		}
+		return &model.ImportResult{Imported: n, Replaced: replaced}, nil
+	case "skip":
+		imported := rowsAffected
+		if imported > n {
+			imported = n
+		}
+		return &model.ImportResult{Imported: imported, Skipped: n - imported}, nil
+	default:
+		return nil, fmt.Errorf("invalid import strategy: %s", strategy)
+	}
 }
