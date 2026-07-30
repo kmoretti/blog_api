@@ -10,11 +10,16 @@ import (
 )
 
 // ExportDataDir writes the contents of dataDir into w as a zip archive.
-func ExportDataDir(dataDir string, w io.Writer) error {
+func ExportDataDir(dataDir string, w io.Writer) (err error) {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
+	defer func() {
+		cerr := zw.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
 
-	return filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -24,6 +29,10 @@ func ExportDataDir(dataDir string, w io.Writer) error {
 		}
 		if rel == "." {
 			return nil
+		}
+		// Skip symbolic links to avoid backing up unintended external paths.
+		if info.Mode()&os.ModeSymlink != 0 {
+			return filepath.SkipDir
 		}
 		// Normalize to forward slashes for zip.
 		zipName := filepath.ToSlash(rel)
@@ -48,6 +57,7 @@ func ExportDataDir(dataDir string, w io.Writer) error {
 		_, err = io.Copy(fw, f)
 		return err
 	})
+	return err
 }
 
 // BackupFilename returns a timestamped backup filename.

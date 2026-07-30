@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,14 +34,27 @@ func TestExportDataDir(t *testing.T) {
 	if len(r.File) != 2 {
 		t.Fatalf("expected 2 files, got %d", len(r.File))
 	}
-	names := map[string]bool{}
+
+	want := map[string]string{
+		"database.db":             "dbdata",
+		"config/system_config.json": "{}",
+	}
+	got := map[string]string{}
 	for _, f := range r.File {
-		names[f.Name] = true
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open %s: %v", f.Name, err)
+		}
+		data, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("read %s: %v", f.Name, err)
+		}
+		got[f.Name] = string(data)
 	}
-	if !names["database.db"] {
-		t.Error("missing database.db")
-	}
-	if !names["config/system_config.json"] {
-		t.Error("missing config/system_config.json")
+	for name, content := range want {
+		if got[name] != content {
+			t.Errorf("%s: expected %q, got %q", name, content, got[name])
+		}
 	}
 }
