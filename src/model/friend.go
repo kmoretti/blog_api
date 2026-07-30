@@ -18,9 +18,9 @@ type FriendWebsite struct {
 	FriendLinkPage  string `json:"friend_link_page,omitempty" gorm:"column:friend_link_page"`
 	Feed            string `json:"feed,omitempty" gorm:"column:feed"`
 	RejectionReason string `json:"rejection_reason,omitempty" gorm:"column:rejection_reason"`
-	Color           string   `json:"color,omitempty" gorm:"column:color"`
-	Rss             string   `json:"rss,omitempty" gorm:"column:rss"`
-	Tags            []string `json:"tags,omitempty" gorm:"column:tags;type:text;serializer:json"`
+	Color           string      `json:"color,omitempty" gorm:"column:color"`
+	Rss             string      `json:"rss,omitempty" gorm:"column:rss"`
+	Tags            StringSlice `json:"tags,omitempty" gorm:"column:tags;type:text"`
 }
 
 // TableName sets the insert table name for this struct type.
@@ -70,9 +70,9 @@ type FriendLinkInGroup struct {
 	Avatar   string   `json:"avatar"`
 	Desc     string   `json:"desc"`
 	Color    string   `json:"color"`
-	Siteshot string   `json:"siteshot"`
-	Rss      string   `json:"rss"`
-	Tags     []string `json:"tags"`
+	Siteshot string      `json:"siteshot"`
+	Rss      string      `json:"rss"`
+	Tags     StringSlice `json:"tags"`
 }
 
 // FriendLinkQueryOptions defines the options for querying friend links.

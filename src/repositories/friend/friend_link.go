@@ -2,6 +2,7 @@ package friendsRepositories
 
 import (
 	"blog_api/src/model"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -315,6 +316,12 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		return 0, nil
 	}
 
+	// Serialize tags to a JSON string so it is stored correctly regardless of
+	// whether GORM's map-based Updates invokes the field serializer.
+	if err := normalizeTagsForUpdate(updates); err != nil {
+		return 0, err
+	}
+
 	// Check if enable_rss is being set to false
 	disableRss := false
 	if val, ok := updates["enable_rss"].(bool); ok && !val {
@@ -406,6 +413,34 @@ func UpdateFriendLinkByOwner(db *gorm.DB, id uint, email string, req model.EditF
 		return nil
 	})
 	return rowsAffected, err
+}
+
+// normalizeTagsForUpdate serializes the tags value to a JSON string when it is
+// present in an updates map. This ensures the database stores valid JSON even
+// when GORM's map-based Updates bypasses the field serializer.
+func normalizeTagsForUpdate(updates map[string]interface{}) error {
+	tagsVal, ok := updates["tags"]
+	if !ok {
+		return nil
+	}
+	if tagsVal == nil {
+		updates["tags"] = "[]"
+		return nil
+	}
+	if s, ok := tagsVal.(string); ok {
+		// If it is already a string, make sure it is valid JSON.
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+			return fmt.Errorf("invalid tags JSON: %w", err)
+		}
+		return nil
+	}
+	data, err := json.Marshal(tagsVal)
+	if err != nil {
+		return fmt.Errorf("failed to serialize tags: %w", err)
+	}
+	updates["tags"] = string(data)
+	return nil
 }
 
 // FriendLinkExists checks if a friend link with the given ID exists.
