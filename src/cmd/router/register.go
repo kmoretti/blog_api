@@ -4,15 +4,24 @@ import (
 	"blog_api/src/handler"
 	handlerAction "blog_api/src/handler/action"
 	authHandler "blog_api/src/handler/auth"
+	backupHandler "blog_api/src/handler/backup"
 	"blog_api/src/middleware"
 	"blog_api/src/model"
 	"blog_api/src/service/oss"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+func limitBackupBodySize(c *gin.Context) {
+	if c.Request.Body != nil {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, backupHandler.MaxBackupSize)
+	}
+	c.Next()
+}
 
 func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTime time.Time) {
 	ossService, err := oss.NewOSSService()
@@ -44,6 +53,10 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	fingerprintHandler := authHandler.NewFingerprintHandler(db)
 	systemHandler := &handlerAction.SystemHandler{}
 	friendLinkGroupHandler := &handler.FriendLinkGroupHandler{DB: db}
+	backupHandlerInstance := &backupHandler.Handler{
+		DB:      db,
+		DataDir: resolveStaticBaseDir(cfg),
+	}
 
 	// API routes
 	apiGroup := router.Group("/api")
@@ -64,15 +77,15 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		{
 			publicGroup.GET("/verify_conf", verifyPublicHandler.GetVerifyConfig)
 			publicGroup.GET("/friend/", friendLinkHandler.GetAllFriendLinks)
-		publicGroup.GET("/friend/self", middleware.FriendLinkAuth(), friendLinkHandler.GetFriendLinkByEmailToken)
-		publicGroup.GET("/friend/:id", friendLinkHandler.GetFriendLinkByID)
-		publicGroup.POST("/friend", middleware.FriendLinkAuth(), updataHandler.CreateFriendLink)
-		publicGroup.PUT("/friend/:id", middleware.FriendLinkAuth(), updataHandler.EditFriendLink)
-		publicGroup.DELETE("/friend/:id", middleware.FriendLinkAuth(), updataHandler.DeleteOwnedFriendLink)
-		publicGroup.POST("/friend/apply", middleware.TurnstileVerify(), friendLinkHandler.ApplyFriendLink)
-		publicGroup.POST("/friend/update-apply", middleware.TurnstileVerify(), friendLinkHandler.UpdateApplyFriendLink)
-		publicGroup.GET("/friend/submissions", friendLinkHandler.GetFriendSubmissions)
-		publicGroup.GET("/rss/", rssPostHandler.GetRssPosts)
+			publicGroup.GET("/friend/self", middleware.FriendLinkAuth(), friendLinkHandler.GetFriendLinkByEmailToken)
+			publicGroup.GET("/friend/:id", friendLinkHandler.GetFriendLinkByID)
+			publicGroup.POST("/friend", middleware.FriendLinkAuth(), updataHandler.CreateFriendLink)
+			publicGroup.PUT("/friend/:id", middleware.FriendLinkAuth(), updataHandler.EditFriendLink)
+			publicGroup.DELETE("/friend/:id", middleware.FriendLinkAuth(), updataHandler.DeleteOwnedFriendLink)
+			publicGroup.POST("/friend/apply", middleware.TurnstileVerify(), friendLinkHandler.ApplyFriendLink)
+			publicGroup.POST("/friend/update-apply", middleware.TurnstileVerify(), friendLinkHandler.UpdateApplyFriendLink)
+			publicGroup.GET("/friend/submissions", friendLinkHandler.GetFriendSubmissions)
+			publicGroup.GET("/rss/", rssPostHandler.GetRssPosts)
 			publicGroup.POST("/rss/refresh", rssPostHandler.RefreshRssPosts)
 			publicGroup.GET("/image/*id", imagePublicHandler.GetImage)
 			publicGroup.GET("/moments/", momentHandler.GetMoments)
@@ -86,22 +99,22 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		actionGroup.Use(middleware.JWTAuth())
 		{
 			friendActionGroup := actionGroup.Group("/friend")
-		{
-			friendActionGroup.GET("", friendLinkHandler.GetFullFriendLinks)
-			friendActionGroup.GET("/:id", friendLinkHandler.GetFullFriendLinkByID)
-			friendActionGroup.POST("", updataHandler.CreateFriendLink)
-			friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
-			friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
-			friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
+			{
+				friendActionGroup.GET("", friendLinkHandler.GetFullFriendLinks)
+				friendActionGroup.GET("/:id", friendLinkHandler.GetFullFriendLinkByID)
+				friendActionGroup.POST("", updataHandler.CreateFriendLink)
+				friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
+				friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
+				friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
 
-			friendActionGroup.GET("/group", friendLinkGroupHandler.GetFriendLinkGroups)
-			friendActionGroup.POST("/group", friendLinkGroupHandler.CreateFriendLinkGroup)
-			friendActionGroup.PUT("/group/:id", friendLinkGroupHandler.UpdateFriendLinkGroup)
-			friendActionGroup.DELETE("/group/:id", friendLinkGroupHandler.DeleteFriendLinkGroup)
-			friendActionGroup.POST("/group/migrate", friendLinkGroupHandler.MigrateFriendLinkGroups)
-			friendActionGroup.GET("/:id/groups", friendLinkGroupHandler.GetFriendLinkGroupIDs)
-			friendActionGroup.PUT("/:id/groups", friendLinkGroupHandler.SetFriendLinkGroups)
-		}
+				friendActionGroup.GET("/group", friendLinkGroupHandler.GetFriendLinkGroups)
+				friendActionGroup.POST("/group", friendLinkGroupHandler.CreateFriendLinkGroup)
+				friendActionGroup.PUT("/group/:id", friendLinkGroupHandler.UpdateFriendLinkGroup)
+				friendActionGroup.DELETE("/group/:id", friendLinkGroupHandler.DeleteFriendLinkGroup)
+				friendActionGroup.POST("/group/migrate", friendLinkGroupHandler.MigrateFriendLinkGroups)
+				friendActionGroup.GET("/:id/groups", friendLinkGroupHandler.GetFriendLinkGroupIDs)
+				friendActionGroup.PUT("/:id/groups", friendLinkGroupHandler.SetFriendLinkGroups)
+			}
 			rssActionGroup := actionGroup.Group("/rss")
 			{
 				rssActionGroup.GET("", RssHandler.GetRss)
@@ -147,6 +160,18 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 				mediaActionGroup.PUT("/:id", mediaHandler.UpdateMedia)
 				mediaActionGroup.DELETE("/:id", mediaHandler.DeleteMedia)
 			}
+			backupActionGroup := actionGroup.Group("/backup")
+			{
+				backupActionGroup.Use(limitBackupBodySize)
+				backupActionGroup.POST("/export", backupHandlerInstance.ExportFullBackup)
+				backupActionGroup.POST("/import", backupHandlerInstance.ImportFullBackup)
+			}
+			importActionGroup := actionGroup.Group("/import")
+			{
+				importActionGroup.Use(limitBackupBodySize)
+				importActionGroup.POST("/:module", backupHandlerInstance.ImportModule)
+			}
+			actionGroup.GET("/export/:module", backupHandlerInstance.ExportModule)
 		}
 	}
 }

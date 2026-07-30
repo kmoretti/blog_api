@@ -28,7 +28,12 @@ func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engin
 	router.MaxMultipartMemory = 8 << 20
 	router.Use(func(c *gin.Context) {
 		if c.Request.Body != nil {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
+			path := c.Request.URL.Path
+			isBackupImport := path == "/api/action/backup/import"
+			isModuleImport := strings.HasPrefix(path, "/api/action/import/")
+			if !isBackupImport && !isModuleImport {
+				c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestBodyBytes)
+			}
 		}
 		c.Next()
 	})
