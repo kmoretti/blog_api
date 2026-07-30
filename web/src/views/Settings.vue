@@ -465,13 +465,7 @@
                   ref="fullRestoreUploadRef"
                   :auto-upload="false"
                   :limit="1"
-                  :on-change="(file) => {
-                    if (file.status === 'removed') {
-                      fullRestoreFile.value = null
-                    } else if (file.raw) {
-                      fullRestoreFile.value = file.raw
-                    }
-                  }"
+                  :on-change="handleFullRestoreChange"
                   accept=".zip"
                 >
                   <el-button>选择 ZIP</el-button>
@@ -504,8 +498,8 @@
               </el-form-item>
               <el-form-item label="策略">
                 <el-radio-group v-model="importStrategy">
-                  <el-radio label="replace">替换冲突</el-radio>
-                  <el-radio label="skip">跳过冲突</el-radio>
+                  <el-radio value="replace">替换冲突</el-radio>
+                  <el-radio value="skip">跳过冲突</el-radio>
                 </el-radio-group>
               </el-form-item>
               <el-form-item>
@@ -516,13 +510,7 @@
                   ref="moduleImportUploadRef"
                   :auto-upload="false"
                   :limit="1"
-                  :on-change="(file) => {
-                    if (file.status === 'removed') {
-                      moduleImportFile.value = null
-                    } else if (file.raw) {
-                      moduleImportFile.value = file.raw
-                    }
-                  }"
+                  :on-change="handleModuleImportChange"
                   accept=".json"
                 >
                   <el-button>选择 JSON</el-button>
@@ -556,7 +544,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadInstance } from 'element-plus'
+import type { UploadFile, UploadInstance } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { getSystemConfig, restartSystem, updateSystemConfig } from '@/api/config'
 import type { SystemConfig } from '@/model/config'
@@ -987,6 +975,22 @@ const handleExportFull = async () => {
     console.error(error)
   } finally {
     exportingFull.value = false
+  }
+}
+
+const handleFullRestoreChange = (file: UploadFile) => {
+  if (file.status === 'removed') {
+    fullRestoreFile.value = null
+  } else if (file.raw) {
+    fullRestoreFile.value = file.raw
+  }
+}
+
+const handleModuleImportChange = (file: UploadFile) => {
+  if (file.status === 'removed') {
+    moduleImportFile.value = null
+  } else if (file.raw) {
+    moduleImportFile.value = file.raw
   }
 }
 
