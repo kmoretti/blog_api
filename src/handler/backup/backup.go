@@ -3,6 +3,7 @@ package backup
 import (
 	"blog_api/src/model"
 	backupSvc "blog_api/src/service/backup"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,7 +44,18 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 	}
 	defer file.Close()
 
-	bak, err := backupSvc.ImportDataDir(h.DataDir, file)
+	limited := io.LimitReader(file, MaxBackupSize+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to read file"))
+		return
+	}
+	if int64(len(data)) > MaxBackupSize {
+		c.JSON(http.StatusRequestEntityTooLarge, model.NewErrorResponse(413, "backup file exceeds maximum size"))
+		return
+	}
+
+	bak, err := backupSvc.ImportDataDir(h.DataDir, bytes.NewReader(data))
 	if err != nil {
 		log.Printf("[backup] import failed: %v", err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, err.Error()))
@@ -83,14 +95,8 @@ func (h *Handler) ImportModule(c *gin.Context) {
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(file)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to read file"))
-		return
-	}
-
 	var env model.ExportEnvelope
-	if err := json.Unmarshal(data, &env); err != nil {
+	if err := json.NewDecoder(file).Decode(&env); err != nil {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid json"))
 		return
 	}
