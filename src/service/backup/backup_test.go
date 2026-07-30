@@ -58,3 +58,37 @@ func TestExportDataDir(t *testing.T) {
 		}
 	}
 }
+
+func TestImportDataDir(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "database.db"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build a backup zip in memory.
+	var buf bytes.Buffer
+	if err := ExportDataDir(tmp, &buf); err != nil {
+		t.Fatal(err)
+	}
+
+	// Mutate the original dir.
+	if err := os.WriteFile(filepath.Join(tmp, "database.db"), []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	bak, err := ImportDataDir(tmp, &buf)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(tmp, "database.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "old" {
+		t.Fatalf("expected restored content 'old', got %q", string(data))
+	}
+	if _, err := os.Stat(bak); err != nil {
+		t.Fatalf("backup dir missing: %v", err)
+	}
+}
