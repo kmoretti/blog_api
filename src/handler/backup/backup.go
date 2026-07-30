@@ -95,8 +95,19 @@ func (h *Handler) ImportModule(c *gin.Context) {
 	}
 	defer file.Close()
 
+	limited := io.LimitReader(file, MaxBackupSize+1)
+	data, err := io.ReadAll(limited)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to read file"))
+		return
+	}
+	if int64(len(data)) > MaxBackupSize {
+		c.JSON(http.StatusRequestEntityTooLarge, model.NewErrorResponse(413, "module json exceeds maximum size"))
+		return
+	}
+
 	var env model.ExportEnvelope
-	if err := json.NewDecoder(file).Decode(&env); err != nil {
+	if err := json.Unmarshal(data, &env); err != nil {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid json"))
 		return
 	}

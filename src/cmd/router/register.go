@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func limitBackupBodySize(c *gin.Context) {
+func limitLargeUploadBodySize(c *gin.Context) {
 	if c.Request.Body != nil {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, backupHandler.MaxBackupSize)
 	}
@@ -162,13 +162,13 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			}
 			backupActionGroup := actionGroup.Group("/backup")
 			{
-				backupActionGroup.Use(limitBackupBodySize)
+				backupActionGroup.Use(limitLargeUploadBodySize)
 				backupActionGroup.POST("/export", backupHandlerInstance.ExportFullBackup)
 				backupActionGroup.POST("/import", backupHandlerInstance.ImportFullBackup)
 			}
 			importActionGroup := actionGroup.Group("/import")
 			{
-				importActionGroup.Use(limitBackupBodySize)
+				importActionGroup.Use(limitLargeUploadBodySize)
 				importActionGroup.POST("/:module", backupHandlerInstance.ImportModule)
 			}
 			actionGroup.GET("/export/:module", backupHandlerInstance.ExportModule)
