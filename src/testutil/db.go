@@ -19,6 +19,8 @@ func NewTestDB(t *testing.T) *gorm.DB {
 	}
 	if err := db.AutoMigrate(
 		&model.FriendWebsite{},
+		&model.FriendLinkGroup{},
+		&model.FriendLinkGroupMapping{},
 		&model.FriendRss{},
 		&model.RssPost{},
 		&model.Moment{},

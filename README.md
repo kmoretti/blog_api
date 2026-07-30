@@ -1654,6 +1654,51 @@ curl -X POST http://localhost:10024/api/action/resource/oss \
   -F "path=moments"
 ```
 
+#### 数据备份与迁移
+
+| 方法 | 路径 | 请求格式 | 说明 |
+| --- | --- | --- | --- |
+| `POST` | `/api/action/backup/export` | - | 导出完整备份，返回 `data/` 目录的 ZIP 压缩包 |
+| `POST` | `/api/action/backup/import` | `multipart/form-data`，文件字段为 `file` | 恢复完整备份，ZIP 内容会覆盖当前 `data/` 目录 |
+| `GET` | `/api/action/export/:module` | - | 导出指定模块的 JSON 数据 |
+| `POST` | `/api/action/import/:module?strategy=<replace\|skip>` | `multipart/form-data`，文件字段为 `file` | 导入指定模块的 JSON 数据，`replace` 替换冲突记录，`skip` 跳过冲突记录 |
+
+支持的模块：`system_config`、`friend_links`、`moments`、`friend_rss`、`images`。
+
+导出完整备份示例：
+
+```bash
+curl -X POST http://localhost:10024/api/action/backup/export \
+  -H "Authorization: Bearer <JWT>" \
+  -o blog_api_backup_$(date +%Y%m%d_%H%M%S).zip
+```
+
+恢复完整备份示例：
+
+```bash
+curl -X POST http://localhost:10024/api/action/backup/import \
+  -H "Authorization: Bearer <JWT>" \
+  -F "file=@./blog_api_backup_20260101_120000.zip"
+```
+
+> 恢复备份会覆盖当前 `data/` 目录，建议恢复后重启服务以完成数据加载。Windows 环境下恢复前建议先停止服务，否则数据库文件可能被占用导致恢复失败。
+
+导出友链模块示例：
+
+```bash
+curl -X GET http://localhost:10024/api/action/export/friend_links \
+  -H "Authorization: Bearer <JWT>" \
+  -o friend_links_$(date +%Y%m%d_%H%M%S).json
+```
+
+导入友链模块示例：
+
+```bash
+curl -X POST "http://localhost:10024/api/action/import/friend_links?strategy=replace" \
+  -H "Authorization: Bearer <JWT>" \
+  -F "file=@./friend_links_20260101_120000.json"
+```
+
 #### 系统操作
 
 | 方法 | 路径 | 说明 |
