@@ -39,6 +39,8 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 			Snapshot:       link.Snapshot,
 			FriendLinkPage: link.FriendLinkPage,
 			Feed:           link.Feed,
+			Color:          link.Color,
+			Tags:           link.Tags,
 		}
 		if isPrivate {
 			dto.Email = link.Email
@@ -65,6 +67,8 @@ func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkD
 		Snapshot:       link.Snapshot,
 		FriendLinkPage: link.FriendLinkPage,
 		Feed:           link.Feed,
+		Color:          link.Color,
+		Tags:           link.Tags,
 	}
 	if isPrivate {
 		dto.Email = link.Email

@@ -203,6 +203,8 @@ func CreateFriendLink(db *gorm.DB, link model.FriendWebsite) (int64, error) {
 		Snapshot:       link.Snapshot,
 		FriendLinkPage: link.FriendLinkPage,
 		Feed:           link.Feed,
+		Color:          link.Color,
+		Tags:           link.Tags,
 	}
 
 	if err := db.Create(&newLink).Error; err != nil {

@@ -18,6 +18,8 @@ export interface FriendLink {
   friend_link_page?: string
   feed?: string
   rejection_reason?: string
+  color?: string
+  tags?: string[]
 }
 
 /**
@@ -54,6 +56,8 @@ export interface CreateFriendLinkPayload {
   snapshot?: string
   friend_link_page?: string
   feed?: string
+  color?: string
+  tags?: string[]
 }
 
 /**
@@ -64,6 +68,8 @@ export type UpdateFriendLinkData = Partial<Omit<FriendLink, 'id' | 'updated_at'>
   website_url?: string
   website_icon_url?: string
   rejection_reason?: string
+  color?: string
+  tags?: string[]
 }
 
 export interface UpdateFriendLinkPayload {

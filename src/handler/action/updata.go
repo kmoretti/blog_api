@@ -45,6 +45,11 @@ func (h *UpdataHandler) CreateFriendLink(c *gin.Context) {
 		req.Status = "survival"
 	}
 
+	// Auto-generate a color for newly approved links when none is provided.
+	if req.Status == "survival" && req.Color == "" {
+		req.Color = friendlink.RandomColor()
+	}
+
 	// Insert into database
 	id, err := friendsRepositories.CreateFriendLink(h.DB, req)
 	if err != nil {

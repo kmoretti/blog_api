@@ -31,9 +31,11 @@ type FriendLinkDTO struct {
 	IsDied          bool   `json:"is_died,omitempty"`
 	SkipHealthCheck *bool  `json:"skip_health_check,omitempty"`
 	UpdatedAt       int64  `json:"updated_at"`
-	Snapshot        string `json:"snapshot,omitempty"`
-	FriendLinkPage  string `json:"friend_link_page,omitempty"`
-	Feed            string `json:"feed,omitempty"`
+	Snapshot        string   `json:"snapshot,omitempty"`
+	FriendLinkPage  string   `json:"friend_link_page,omitempty"`
+	Feed            string   `json:"feed,omitempty"`
+	Color           string   `json:"color,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
 }
 
 // NewSuccessResponse 创建成功响应

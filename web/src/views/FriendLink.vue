@@ -134,6 +134,23 @@
         <el-form-item label="博客 RSS">
           <el-input v-model="form.feed" placeholder="RSS 订阅地址" />
         </el-form-item>
+        <el-form-item label="颜色" prop="color">
+          <div class="color-input-row">
+            <el-color-picker v-model="form.color" />
+            <el-input v-model="form.color" placeholder="留空则在审核通过时自动生成" />
+          </div>
+        </el-form-item>
+        <el-form-item label="标签" prop="tags">
+          <el-select
+            v-model="form.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="输入标签后按回车"
+            style="width: 100%"
+          />
+        </el-form-item>
         <el-form-item label="是否失效" prop="is_died" v-if="isEditMode">
           <el-switch v-model="form.is_died" />
         </el-form-item>
@@ -203,6 +220,8 @@ const form = reactive<{
   feed: string
   is_died: boolean
   rejection_reason: string
+  color: string
+  tags: string[]
 }>({
   id: 0,
   name: '',
@@ -218,7 +237,9 @@ const form = reactive<{
   friend_link_page: '',
   feed: '',
   is_died: false,
-  rejection_reason: ''
+  rejection_reason: '',
+  color: '',
+  tags: []
 })
 
 const rules = reactive<FormRules>({
@@ -275,6 +296,8 @@ const openFormDialog = (link?: FriendLink) => {
   if (link) {
     isEditMode.value = true
     Object.assign(form, link)
+    form.color = link.color || ''
+    form.tags = link.tags || []
   } else {
     isEditMode.value = false
   }
@@ -298,7 +321,9 @@ const resetForm = () => {
     friend_link_page: '',
     feed: '',
     is_died: false,
-    rejection_reason: ''
+    rejection_reason: '',
+    color: '',
+    tags: []
   })
 }
 
@@ -322,6 +347,8 @@ const submitForm = async () => {
             snapshot: form.snapshot || undefined,
             friend_link_page: form.friend_link_page || undefined,
             feed: form.feed || undefined,
+            color: form.color || undefined,
+            tags: form.tags.length > 0 ? form.tags : undefined,
           }
           await createFriendLink(payload)
           ElMessage.success('创建成功')
@@ -451,6 +478,17 @@ const handleRssToggle = async (link: FriendLink) => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.color-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.color-input-row .el-input {
+  flex: 1;
 }
 
 /* Responsive */
