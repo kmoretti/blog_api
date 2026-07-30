@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -34,7 +35,7 @@ func ExportDataDir(dataDir string, w io.Writer) (err error) {
 		}
 		// Skip symbolic links to avoid backing up unintended external paths.
 		if info.Mode()&os.ModeSymlink != 0 {
-			return filepath.SkipDir
+			return nil
 		}
 		// Normalize to forward slashes for zip.
 		zipName := filepath.ToSlash(rel)
@@ -90,12 +91,16 @@ func ImportDataDir(dataDir string, r io.Reader) (string, error) {
 	}
 
 	if err := os.RemoveAll(dataDir); err != nil {
-		restoreDir(bak, dataDir)
+		if rerr := restoreDir(bak, dataDir); rerr != nil {
+			err = errors.Join(err, rerr)
+		}
 		return "", fmt.Errorf("failed to clear data dir: %w", err)
 	}
 
 	if err := extractZip(zr, dataDir); err != nil {
-		restoreDir(bak, dataDir)
+		if rerr := restoreDir(bak, dataDir); rerr != nil {
+			err = errors.Join(err, rerr)
+		}
 		return "", fmt.Errorf("failed to extract backup: %w", err)
 	}
 
@@ -123,6 +128,9 @@ func copyDir(src, dst string) error {
 		if rel == "." {
 			return nil
 		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
 		target := filepath.Join(dst, rel)
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
@@ -139,15 +147,23 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer df.Close()
-		_, err = io.Copy(df, sf)
-		return err
+		_, copyErr := io.Copy(df, sf)
+		closeErr := df.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
 	})
 }
 
-func restoreDir(src, dst string) {
-	_ = os.RemoveAll(dst)
-	_ = copyDir(src, dst)
+func restoreDir(src, dst string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return fmt.Errorf("failed to remove %q: %w", dst, err)
+	}
+	if err := copyDir(src, dst); err != nil {
+		return fmt.Errorf("failed to copy %q to %q: %w", src, dst, err)
+	}
+	return nil
 }
 
 func extractZip(zr *zip.Reader, dst string) error {
@@ -158,7 +174,8 @@ func extractZip(zr *zip.Reader, dst string) error {
 	for _, f := range zr.File {
 		target := filepath.Join(dstAbs, filepath.FromSlash(f.Name))
 		target = filepath.Clean(target)
-		if !strings.HasPrefix(target, dstAbs+string(os.PathSeparator)) && target != dstAbs {
+		rel, err := filepath.Rel(dstAbs, target)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			return fmt.Errorf("invalid zip entry %q: escapes destination", f.Name)
 		}
 		if f.FileInfo().IsDir() {

@@ -36,7 +36,7 @@ func TestExportDataDir(t *testing.T) {
 	}
 
 	want := map[string]string{
-		"database.db":             "dbdata",
+		"database.db":               "dbdata",
 		"config/system_config.json": "{}",
 	}
 	got := map[string]string{}
@@ -90,5 +90,51 @@ func TestImportDataDir(t *testing.T) {
 	}
 	if _, err := os.Stat(bak); err != nil {
 		t.Fatalf("backup dir missing: %v", err)
+	}
+}
+
+func TestValidateBackupZip_MissingDatabase(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if _, err := zw.Create("other.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := validateBackupZip(zr); err == nil {
+		t.Fatal("expected error for archive missing database.db")
+	}
+}
+
+func TestExtractZip_ZipSlip(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	if _, err := zw.Create("../evil.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dst := t.TempDir()
+	if err := extractZip(zr, dst); err == nil {
+		t.Fatal("expected zip-slip entry to be rejected")
+	}
+
+	evil := filepath.Clean(filepath.Join(dst, "..", "evil.txt"))
+	if _, err := os.Stat(evil); !os.IsNotExist(err) {
+		t.Fatalf("zip-slip file was created outside destination: %v", err)
 	}
 }
