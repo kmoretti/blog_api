@@ -11,8 +11,7 @@ import (
 	"testing"
 
 	"blog_api/src/model"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
+	"blog_api/src/testutil"
 )
 
 func TestExportDataDir(t *testing.T) {
@@ -164,20 +163,8 @@ func TestExportModuleSystemConfig(t *testing.T) {
 	}
 }
 
-func newTestDB(t *testing.T) *gorm.DB {
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.AutoMigrate(&model.FriendWebsite{}, &model.Moment{}, &model.MomentMedia{}, &model.FriendRss{}, &model.RssPost{}, &model.Image{}); err != nil {
-		t.Fatal(err)
-	}
-	return db
-}
-
 func TestExportModuleFriendLinksJSONTags(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	link := model.FriendWebsite{
 		Name:   "Test",
 		Link:   "https://example.com",
@@ -217,7 +204,7 @@ func TestExportModuleFriendLinksJSONTags(t *testing.T) {
 }
 
 func TestExportModuleMoments(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	moment := model.Moment{Content: "hello"}
 	if err := db.Create(&moment).Error; err != nil {
 		t.Fatal(err)
@@ -251,7 +238,7 @@ func TestExportModuleMoments(t *testing.T) {
 }
 
 func TestExportModuleFriendRss(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	feed := model.FriendRss{Name: "Test Feed", RssURL: "https://example.com/feed.xml"}
 	if err := db.Create(&feed).Error; err != nil {
 		t.Fatal(err)
@@ -285,11 +272,13 @@ func TestExportModuleFriendRss(t *testing.T) {
 }
 
 func TestImportModuleFriendLinks(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	tmp := t.TempDir()
 
 	// Insert initial link
-	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"})
+	if err := db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// Export
 	env, err := ExportModule(db, "friend_links", tmp)
@@ -298,7 +287,9 @@ func TestImportModuleFriendLinks(t *testing.T) {
 	}
 
 	// Mutate
-	db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed")
+	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed").Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// Import with replace
 	res, err := ImportModule(db, "friend_links", env, "replace", tmp)
@@ -319,11 +310,13 @@ func TestImportModuleFriendLinks(t *testing.T) {
 }
 
 func TestImportModuleFriendLinksSkip(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	tmp := t.TempDir()
 
 	// Insert initial link
-	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"})
+	if err := db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test", Status: "survival"}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// Export
 	env, err := ExportModule(db, "friend_links", tmp)
@@ -332,7 +325,9 @@ func TestImportModuleFriendLinksSkip(t *testing.T) {
 	}
 
 	// Mutate
-	db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed")
+	if err := db.Model(&model.FriendWebsite{}).Where("id = ?", 1).Update("website_name", "Changed").Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// Import with skip
 	res, err := ImportModule(db, "friend_links", env, "skip", tmp)
@@ -398,7 +393,7 @@ func TestImportModuleSystemConfig(t *testing.T) {
 }
 
 func TestImportModuleMoments(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	tmp := t.TempDir()
 
 	moment := model.Moment{Content: "hello"}
@@ -417,8 +412,12 @@ func TestImportModuleMoments(t *testing.T) {
 	}
 
 	// Clear database
-	db.Where("1 = 1").Delete(&model.MomentMedia{})
-	db.Where("1 = 1").Delete(&model.Moment{})
+	if err := db.Where("1 = 1").Delete(&model.MomentMedia{}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("1 = 1").Delete(&model.Moment{}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// Import with replace
 	res, err := ImportModule(db, "moments", env, "replace", tmp)
@@ -447,9 +446,11 @@ func TestImportModuleMoments(t *testing.T) {
 }
 
 func TestImportModuleInvalidStrategy(t *testing.T) {
-	db := newTestDB(t)
+	db := testutil.NewTestDB(t)
 	tmp := t.TempDir()
-	db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test"})
+	if err := db.Create(&model.FriendWebsite{Name: "A", Link: "https://a.test"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	env, err := ExportModule(db, "friend_links", tmp)
 	if err != nil {
 		t.Fatal(err)
