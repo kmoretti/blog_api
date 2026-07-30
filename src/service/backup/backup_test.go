@@ -98,6 +98,43 @@ func TestImportDataDir(t *testing.T) {
 	}
 }
 
+func TestClearDirKeepsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "b.txt"), []byte("b"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := clearDir(dir); err != nil {
+		t.Fatalf("clearDir failed: %v", err)
+	}
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatalf("directory was removed: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal("path is not a directory")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("expected empty directory, got %d entries: %v", len(entries), names)
+	}
+}
+
 func TestValidateBackupZip_MissingDatabase(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)

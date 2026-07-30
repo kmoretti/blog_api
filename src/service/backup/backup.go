@@ -96,7 +96,9 @@ func ImportDataDir(dataDir string, databasePath string, r io.Reader) (string, er
 		return "", fmt.Errorf("failed to backup current data dir: %w", err)
 	}
 
-	if err := os.RemoveAll(dataDir); err != nil {
+	// Clear the directory contents without removing the directory itself, so
+	// the operation works when dataDir is a Docker volume mount point.
+	if err := clearDir(dataDir); err != nil {
 		if rerr := restoreDir(bak, dataDir); rerr != nil {
 			err = errors.Join(err, rerr)
 		}
@@ -164,11 +166,39 @@ func copyDir(src, dst string) error {
 }
 
 func restoreDir(src, dst string) error {
-	if err := os.RemoveAll(dst); err != nil {
-		return fmt.Errorf("failed to remove %q: %w", dst, err)
+	if err := clearDir(dst); err != nil {
+		return fmt.Errorf("failed to clear %q: %w", dst, err)
 	}
 	if err := copyDir(src, dst); err != nil {
 		return fmt.Errorf("failed to copy %q to %q: %w", src, dst, err)
+	}
+	return nil
+}
+
+// clearDir removes all entries inside dir without removing dir itself.
+// This is required when dir is a Docker volume mount point.
+func clearDir(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		path := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			if err := clearDir(path); err != nil {
+				return err
+			}
+			if err := os.Remove(path); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
 	}
 	return nil
 }
