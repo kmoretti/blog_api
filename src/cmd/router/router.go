@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"blog_api/src/config"
+	"blog_api/src/handler"
 	"blog_api/src/model"
 	"blog_api/src/service/fcircle"
 	"log"
@@ -43,7 +44,9 @@ func SetupRouter(db *gorm.DB, cfg *model.Config, startTime time.Time) *gin.Engin
 	if err := fcircle.Init(db, dataDir); err != nil {
 		log.Printf("[router][fcircle] 初始化失败: %v", err)
 	}
+	friendLinkGroupHandler := &handler.FriendLinkGroupHandler{DB: db}
 	router.GET("/fcircle.json", fcircle.Handler())
+	router.GET("/friend.json", friendLinkGroupHandler.GetFriendLinkJSON)
 
 	router.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/panel/")

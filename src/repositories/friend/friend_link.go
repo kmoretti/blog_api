@@ -290,6 +290,9 @@ func UpdateFriendLinkByID(db *gorm.DB, id uint, req model.EditFriendLinkReq) (in
 		"friend_link_page":  true,
 		"feed":              true,
 		"rejection_reason":  true,
+		"color":             true,
+		"rss":               true,
+		"tags":              true,
 	}
 
 	updates := map[string]interface{}{}
@@ -410,4 +413,18 @@ func FriendLinkExists(db *gorm.DB, id int) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// UpdateFriendLinkColor updates the color column for a single friend link.
+func UpdateFriendLinkColor(db *gorm.DB, id int, color string) error {
+	return db.Model(&model.FriendWebsite{}).Where("id = ?", id).Update("color", color).Error
+}
+
+// ListFriendLinksWithoutColor returns all survival friend links that have no color set.
+func ListFriendLinksWithoutColor(db *gorm.DB) ([]model.FriendWebsite, error) {
+	var links []model.FriendWebsite
+	err := db.Model(&model.FriendWebsite{}).
+		Where("status = ? AND (color = '' OR color IS NULL)", "survival").
+		Find(&links).Error
+	return links, err
 }

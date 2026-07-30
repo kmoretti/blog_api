@@ -679,6 +679,8 @@ page_size    每页数量，默认 20，最大 1000
 
 公开友链列表（`GET /api/public/friend/`）在未指定 `status` 时默认只返回 `survival` 状态的友链，避免未审核或被拒绝的申请被访客看到。
 
+友链数据还包含 `color`（主题色）与 `tags`（标签数组），`color` 在首次被管理员审核通过时自动生成，管理员后续可通过后台接口手动修改；`tags` 仅由管理员维护。
+
 自助提交友链示例：
 
 ```bash
@@ -711,6 +713,9 @@ curl -X POST http://localhost:10024/api/public/friend \
 | `snapshot` | string | 否 | 站点截图 URL |
 | `friend_link_page` | string | 否 | 对方友链页面地址 |
 | `feed` | string | 否 | RSS 订阅地址 |
+| `color` | string | 否 | 主题颜色，例如 `#0078e7`。申请时不填，管理员首次通过审核后会自动生成 |
+| `rss` | string | 否 | 独立 RSS 地址，若为空则读取 `feed` |
+| `tags` | []string | 否 | 管理员维护的标签列表 |
 | `enable_rss` | bool | 否 | 是否启用 RSS 抓取，默认 `false` |
 | `turnstile_token` | string | 条件 | Turnstile 启用时必填 |
 
@@ -761,6 +766,9 @@ curl -X POST http://localhost:10024/api/public/friend/apply \
 | `snapshot` | string | 否 | 新站点截图 |
 | `friend_link_page` | string | 否 | 新友链页面 |
 | `feed` | string | 否 | 新 RSS 地址 |
+| `color` | string | 否 | 主题颜色 |
+| `rss` | string | 否 | 独立 RSS 地址 |
+| `tags` | []string | 否 | 管理员维护的标签列表 |
 | `enable_rss` | bool | 否 | 是否启用 RSS 抓取 |
 | `turnstile_token` | string | 条件 | Turnstile 启用时必填 |
 
@@ -1562,8 +1570,16 @@ Authorization: Bearer <JWT>
 | `GET` | `/api/action/friend` | 分页获取完整友链 |
 | `GET` | `/api/action/friend/:id` | 获取单条完整友链 |
 | `POST` | `/api/action/friend` | 创建友链 |
-| `PUT` | `/api/action/friend/:id` | 更新友链；状态改为 `survival` 或 `rejected` 时会自动发送邮件通知申请人 |
+| `PUT` | `/api/action/friend/:id` | 更新友链；状态改为 `survival` 或 `rejected` 时会自动发送邮件通知申请人。首次改为 `survival` 且 `color` 为空时，系统会自动生成随机主题色 |
 | `DELETE` | `/api/action/friend/:id` | 删除友链 |
+| `GET` | `/api/action/friend/group` | 获取友链分组列表 |
+| `POST` | `/api/action/friend/group` | 创建友链分组 |
+| `PUT` | `/api/action/friend/group/:id` | 更新友链分组 |
+| `DELETE` | `/api/action/friend/group/:id` | 删除友链分组 |
+| `GET` | `/api/action/friend/:id/groups` | 获取指定友链所属分组 ID 列表 |
+| `PUT` | `/api/action/friend/:id/groups` | 设置指定友链所属分组 |
+| `POST` | `/api/action/friend/group/migrate` | 将未分组的友链归入默认分组，并为没有颜色的 survival 友链自动生成主题色 |
+| `GET` | `/friend.json` | 公开访问，按分组输出 survival 友链，包含 `color` 与 `tags` 字段 |
 | `GET` | `/api/action/rss` | 分页获取 RSS 配置 |
 | `POST` | `/api/action/rss` | 创建 RSS 配置 |
 | `PUT` | `/api/action/rss/:id` | 更新 RSS 配置 |

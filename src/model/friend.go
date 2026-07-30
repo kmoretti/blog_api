@@ -18,11 +18,61 @@ type FriendWebsite struct {
 	FriendLinkPage  string `json:"friend_link_page,omitempty" gorm:"column:friend_link_page"`
 	Feed            string `json:"feed,omitempty" gorm:"column:feed"`
 	RejectionReason string `json:"rejection_reason,omitempty" gorm:"column:rejection_reason"`
+	Color           string   `json:"color,omitempty" gorm:"column:color"`
+	Rss             string   `json:"rss,omitempty" gorm:"column:rss"`
+	Tags            []string `json:"tags,omitempty" gorm:"column:tags;type:text;serializer:json"`
 }
 
 // TableName sets the insert table name for this struct type.
 func (FriendWebsite) TableName() string {
 	return "friend_link"
+}
+
+// FriendLinkGroup represents a friend link display group.
+type FriendLinkGroup struct {
+	ID          int    `json:"id" gorm:"column:id;primaryKey"`
+	Name        string `json:"name" gorm:"column:name;not null"`
+	Description string `json:"description" gorm:"column:description"`
+	SortOrder   int    `json:"sort_order" gorm:"column:sort_order;default:0"`
+	CreatedAt   int64  `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt   int64  `json:"updated_at" gorm:"column:updated_at"`
+}
+
+// TableName sets the table name for FriendLinkGroup.
+func (FriendLinkGroup) TableName() string {
+	return "friend_link_group"
+}
+
+// FriendLinkGroupMapping maps a friend link to a group.
+type FriendLinkGroupMapping struct {
+	ID             int `json:"id" gorm:"column:id;primaryKey"`
+	FriendLinkID   int `json:"friend_link_id" gorm:"column:friend_link_id;not null;index"`
+	FriendLinkGroupID int `json:"friend_link_group_id" gorm:"column:friend_link_group_id;not null;index"`
+}
+
+// TableName sets the table name for FriendLinkGroupMapping.
+func (FriendLinkGroupMapping) TableName() string {
+	return "friend_link_group_mapping"
+}
+
+// FriendLinkGroupOutput represents a group in the public friend.json output.
+type FriendLinkGroupOutput struct {
+	Name  string              `json:"name"`
+	Desc  string              `json:"desc"`
+	Links []FriendLinkInGroup `json:"links"`
+}
+
+// FriendLinkInGroup represents a single friend link inside a group output.
+type FriendLinkInGroup struct {
+	Name     string   `json:"name"`
+	Blog     string   `json:"blog"`
+	URL      string   `json:"url"`
+	Avatar   string   `json:"avatar"`
+	Desc     string   `json:"desc"`
+	Color    string   `json:"color"`
+	Siteshot string   `json:"siteshot"`
+	Rss      string   `json:"rss"`
+	Tags     []string `json:"tags"`
 }
 
 // FriendLinkQueryOptions defines the options for querying friend links.

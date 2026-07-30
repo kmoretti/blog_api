@@ -43,6 +43,7 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	configHandler := &handlerAction.ConfigHandler{}
 	fingerprintHandler := authHandler.NewFingerprintHandler(db)
 	systemHandler := &handlerAction.SystemHandler{}
+	friendLinkGroupHandler := &handler.FriendLinkGroupHandler{DB: db}
 
 	// API routes
 	apiGroup := router.Group("/api")
@@ -85,14 +86,22 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 		actionGroup.Use(middleware.JWTAuth())
 		{
 			friendActionGroup := actionGroup.Group("/friend")
-			{
-				friendActionGroup.GET("", friendLinkHandler.GetFullFriendLinks)
-				friendActionGroup.GET("/:id", friendLinkHandler.GetFullFriendLinkByID)
-				friendActionGroup.POST("", updataHandler.CreateFriendLink)
-				friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
-				friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
-				friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
-			}
+		{
+			friendActionGroup.GET("", friendLinkHandler.GetFullFriendLinks)
+			friendActionGroup.GET("/:id", friendLinkHandler.GetFullFriendLinkByID)
+			friendActionGroup.POST("", updataHandler.CreateFriendLink)
+			friendActionGroup.PUT("/:id", updataHandler.EditFriendLink)
+			friendActionGroup.DELETE("/:id", updataHandler.DeleteFriendLink)
+			friendActionGroup.POST("/:id/recheck", friendLinkHandler.RecheckFriendLink)
+
+			friendActionGroup.GET("/group", friendLinkGroupHandler.GetFriendLinkGroups)
+			friendActionGroup.POST("/group", friendLinkGroupHandler.CreateFriendLinkGroup)
+			friendActionGroup.PUT("/group/:id", friendLinkGroupHandler.UpdateFriendLinkGroup)
+			friendActionGroup.DELETE("/group/:id", friendLinkGroupHandler.DeleteFriendLinkGroup)
+			friendActionGroup.POST("/group/migrate", friendLinkGroupHandler.MigrateFriendLinkGroups)
+			friendActionGroup.GET("/:id/groups", friendLinkGroupHandler.GetFriendLinkGroupIDs)
+			friendActionGroup.PUT("/:id/groups", friendLinkGroupHandler.SetFriendLinkGroups)
+		}
 			rssActionGroup := actionGroup.Group("/rss")
 			{
 				rssActionGroup.GET("", RssHandler.GetRss)

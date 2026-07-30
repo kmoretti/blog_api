@@ -18,6 +18,7 @@ import (
 
 const (
 	filename          = "fcircle.json"
+	friendJSONName    = "friend.json"
 	regenerateDelay   = 5 * time.Second
 	maxSurvivalFriend = 10000
 )
@@ -79,8 +80,8 @@ func Handler() gin.HandlerFunc {
 	return s.Handler()
 }
 
-// Generate queries all survival friend links and writes fcircle.json atomically.
-// The output format matches { "friends": [ [name, link, friend_link_page, avatar], ... ] }.
+// Generate queries all survival friend links and writes both fcircle.json and
+// friend.json atomically.
 func (s *Service) Generate() error {
 	opts := model.FriendLinkQueryOptions{
 		Status: "survival",
@@ -101,16 +102,132 @@ func (s *Service) Generate() error {
 		})
 	}
 
-	data := map[string]interface{}{
+	fcircleData := map[string]interface{}{
 		"friends": friends,
 	}
 
-	if err := os.MkdirAll(s.dataDir, 0o755); err != nil {
+	if err := writeJSONFile(s.dataDir, filename, fcircleData); err != nil {
 		return err
 	}
 
-	tmpPath := filepath.Join(s.dataDir, "."+filename+".tmp")
-	finalPath := filepath.Join(s.dataDir, filename)
+	friendJSONData, err := buildFriendJSON(s.db, resp.Links)
+	if err != nil {
+		return err
+	}
+	return writeJSONFile(s.dataDir, friendJSONName, friendJSONData)
+}
+
+// GenerateFriendJSON builds the grouped friend.json data in memory.
+// It is exported so the HTTP handler can serve it without touching the disk.
+func GenerateFriendJSON(db *gorm.DB) (map[string]interface{}, error) {
+	opts := model.FriendLinkQueryOptions{
+		Status: "survival",
+		Limit:  maxSurvivalFriend,
+	}
+	resp, err := friendsRepositories.QueryFriendLinks(db, opts)
+	if err != nil {
+		return nil, err
+	}
+	return buildFriendJSON(db, resp.Links)
+}
+
+func buildFriendJSON(db *gorm.DB, links []model.FriendWebsite) (map[string]interface{}, error) {
+	groups, err := friendsRepositories.ListFriendLinkGroups(db)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultID, err := friendsRepositories.EnsureDefaultFriendLinkGroup(db)
+	if err != nil {
+		return nil, err
+	}
+
+	groupIndex := make(map[int]int, len(groups))
+	outputs := make([]model.FriendLinkGroupOutput, 0, len(groups)+1)
+	for _, g := range groups {
+		groupIndex[g.ID] = len(outputs)
+		outputs = append(outputs, model.FriendLinkGroupOutput{
+			Name:  g.Name,
+			Desc:  g.Description,
+			Links: make([]model.FriendLinkInGroup, 0),
+		})
+	}
+
+	// Ensure the default group is present even if it was manually deleted.
+	if _, ok := groupIndex[defaultID]; !ok {
+		groupIndex[defaultID] = len(outputs)
+		outputs = append(outputs, model.FriendLinkGroupOutput{
+			Name:  "网上邻居",
+			Desc:  "",
+			Links: make([]model.FriendLinkInGroup, 0),
+		})
+	}
+
+	for _, link := range links {
+		ids, err := friendsRepositories.GetFriendLinkGroupIDs(db, link.ID)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			ids = []int{defaultID}
+		}
+
+		item := model.FriendLinkInGroup{
+			Name:     link.Name,
+			Blog:     link.Name,
+			URL:      link.Link,
+			Avatar:   link.Avatar,
+			Desc:     link.Info,
+			Color:    link.Color,
+			Siteshot: link.Snapshot,
+			Rss:      firstNonEmpty(link.Rss, link.Feed),
+			Tags:     link.Tags,
+		}
+
+		seen := make(map[int]struct{}, len(ids))
+		for _, gid := range ids {
+			if _, ok := seen[gid]; ok {
+				continue
+			}
+			seen[gid] = struct{}{}
+			idx, ok := groupIndex[gid]
+			if !ok {
+				// Group no longer exists; fall back to default group.
+				idx = groupIndex[defaultID]
+			}
+			outputs[idx].Links = append(outputs[idx].Links, item)
+		}
+	}
+
+	// Remove groups that ended up empty.
+	filtered := make([]model.FriendLinkGroupOutput, 0, len(outputs))
+	for _, g := range outputs {
+		if len(g.Links) > 0 {
+			filtered = append(filtered, g)
+		}
+	}
+
+	return map[string]interface{}{
+		"linkGroups": filtered,
+	}, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func writeJSONFile(dataDir, name string, data interface{}) error {
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
+	}
+
+	tmpPath := filepath.Join(dataDir, "."+name+".tmp")
+	finalPath := filepath.Join(dataDir, name)
 
 	file, err := os.Create(tmpPath)
 	if err != nil {

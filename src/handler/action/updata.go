@@ -5,6 +5,7 @@ import (
 	friendsRepositories "blog_api/src/repositories/friend"
 	"blog_api/src/service"
 	"blog_api/src/service/fcircle"
+	"blog_api/src/service/friendlink"
 	"errors"
 	"log"
 	"net/http"
@@ -238,6 +239,12 @@ func (h *UpdataHandler) EditFriendLink(c *gin.Context) {
 		switch newStatus {
 		case "survival":
 			go service.NotifyFriendLinkApproved(updatedLink)
+			// Assign a random color the first time a link is approved.
+			if existingLink.Color == "" {
+				if err := friendsRepositories.UpdateFriendLinkColor(h.DB, int(id), friendlink.RandomColor()); err != nil {
+					log.Printf("[handler][updata] 自动设置友链颜色失败 ID %d: %v", id, err)
+				}
+			}
 		case "rejected":
 			go service.NotifyFriendLinkRejected(updatedLink)
 		}
