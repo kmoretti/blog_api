@@ -81,7 +81,7 @@ func TestImportDataDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bak, err := ImportDataDir(tmp, &buf)
+	bak, err := ImportDataDir(tmp, "database.db", &buf)
 	if err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestValidateBackupZip_MissingDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := validateBackupZip(zr); err == nil {
+	if err := validateBackupZip(zr, "database.db"); err == nil {
 		t.Fatal("expected error for archive missing database.db")
 	}
 }

@@ -451,6 +451,12 @@
               :closable="false"
               style="margin-bottom: 16px"
             />
+            <el-alert
+              title="Windows 环境下恢复备份前建议先停止服务，否则数据库文件可能被占用导致恢复失败。"
+              type="warning"
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
             <el-button type="primary" :loading="exportingFull" @click="handleExportFull">导出备份</el-button>
             <el-divider />
             <el-form label-width="120px">
@@ -459,7 +465,13 @@
                   ref="fullRestoreUploadRef"
                   :auto-upload="false"
                   :limit="1"
-                  :on-change="(file) => { if (file.status !== 'removed' && file.raw) fullRestoreFile.value = file.raw }"
+                  :on-change="(file) => {
+                    if (file.status === 'removed') {
+                      fullRestoreFile.value = null
+                    } else if (file.raw) {
+                      fullRestoreFile.value = file.raw
+                    }
+                  }"
                   accept=".zip"
                 >
                   <el-button>选择 ZIP</el-button>
@@ -504,7 +516,13 @@
                   ref="moduleImportUploadRef"
                   :auto-upload="false"
                   :limit="1"
-                  :on-change="(file) => { if (file.status !== 'removed' && file.raw) moduleImportFile.value = file.raw }"
+                  :on-change="(file) => {
+                    if (file.status === 'removed') {
+                      moduleImportFile.value = null
+                    } else if (file.raw) {
+                      moduleImportFile.value = file.raw
+                    }
+                  }"
                   accept=".json"
                 >
                   <el-button>选择 JSON</el-button>

@@ -58,8 +58,9 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 	systemHandler := &handlerAction.SystemHandler{}
 	friendLinkGroupHandler := &handler.FriendLinkGroupHandler{DB: db}
 	backupHandlerInstance := &backupHandler.Handler{
-		DB:      db,
-		DataDir: resolveStaticBaseDir(cfg),
+		DB:           db,
+		DataDir:      resolveStaticBaseDir(cfg),
+		DatabasePath: cfg.Data.Database.Path,
 	}
 
 	// API routes

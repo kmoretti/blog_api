@@ -20,8 +20,9 @@ const MaxBackupSize = 500 << 20 // 500 MB
 
 // Handler holds dependencies for backup endpoints.
 type Handler struct {
-	DB      *gorm.DB
-	DataDir string
+	DB           *gorm.DB
+	DataDir      string
+	DatabasePath string
 }
 
 // ExportFullBackup streams a zip of the data directory.
@@ -60,7 +61,7 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 		return
 	}
 
-	bak, err := backupSvc.ImportDataDir(h.DataDir, bytes.NewReader(data))
+	bak, err := backupSvc.ImportDataDir(h.DataDir, h.DatabasePath, bytes.NewReader(data))
 	if err != nil {
 		log.Printf("[backup] import failed: %v", err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "import failed"))

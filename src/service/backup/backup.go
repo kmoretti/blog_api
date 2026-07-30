@@ -76,7 +76,7 @@ func BackupFilename(prefix string) string {
 
 // ImportDataDir restores dataDir from a zip archive read from r.
 // It returns the path of the automatic backup copy of the previous dataDir.
-func ImportDataDir(dataDir string, r io.Reader) (string, error) {
+func ImportDataDir(dataDir string, databasePath string, r io.Reader) (string, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", err
@@ -87,7 +87,7 @@ func ImportDataDir(dataDir string, r io.Reader) (string, error) {
 		return "", err
 	}
 
-	if err := validateBackupZip(zr); err != nil {
+	if err := validateBackupZip(zr, databasePath); err != nil {
 		return "", err
 	}
 
@@ -113,13 +113,14 @@ func ImportDataDir(dataDir string, r io.Reader) (string, error) {
 	return bak, nil
 }
 
-func validateBackupZip(zr *zip.Reader) error {
+func validateBackupZip(zr *zip.Reader, databasePath string) error {
+	expected := filepath.Base(databasePath)
 	for _, f := range zr.File {
-		if f.Name == "database.db" {
+		if filepath.Base(f.Name) == expected {
 			return nil
 		}
 	}
-	return fmt.Errorf("backup archive missing database.db")
+	return fmt.Errorf("backup archive missing %s", expected)
 }
 
 func copyDir(src, dst string) error {
