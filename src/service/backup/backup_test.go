@@ -3,10 +3,16 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"blog_api/src/model"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 func TestExportDataDir(t *testing.T) {
@@ -155,5 +161,124 @@ func TestExportModuleSystemConfig(t *testing.T) {
 	}
 	if env.Module != "system_config" {
 		t.Fatalf("expected module system_config, got %s", env.Module)
+	}
+}
+
+func newTestDB(t *testing.T) *gorm.DB {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.FriendWebsite{}, &model.Moment{}, &model.MomentMedia{}, &model.FriendRss{}, &model.RssPost{}, &model.Image{}); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func TestExportModuleFriendLinksJSONTags(t *testing.T) {
+	db := newTestDB(t)
+	link := model.FriendWebsite{
+		Name:   "Test",
+		Link:   "https://example.com",
+		Avatar: "https://example.com/avatar.png",
+		Tags:   []string{"blog", "test"},
+	}
+	if err := db.Create(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := ExportModule(db, "friend_links", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Module != "friend_links" {
+		t.Fatalf("expected module friend_links, got %s", env.Module)
+	}
+	if env.Count != 1 {
+		t.Fatalf("expected count 1, got %d", env.Count)
+	}
+
+	data, err := json.Marshal(env.Items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonStr := string(data)
+	for _, field := range []string{"website_name", "website_url", "website_icon_url"} {
+		if strings.Contains(jsonStr, field) {
+			t.Errorf("exported JSON should not contain db column name %q", field)
+		}
+	}
+	for _, field := range []string{`"name"`, `"link"`, `"avatar"`, `"tags"`} {
+		if !strings.Contains(jsonStr, field) {
+			t.Errorf("exported JSON should contain JSON-tagged field %q", field)
+		}
+	}
+}
+
+func TestExportModuleMoments(t *testing.T) {
+	db := newTestDB(t)
+	moment := model.Moment{Content: "hello"}
+	if err := db.Create(&moment).Error; err != nil {
+		t.Fatal(err)
+	}
+	media := model.MomentMedia{MomentID: moment.ID, MediaURL: "https://example.com/img.png", MediaType: "image"}
+	if err := db.Create(&media).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := ExportModule(db, "moments", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Module != "moments" {
+		t.Fatalf("expected module moments, got %s", env.Module)
+	}
+	if env.Count != 1 {
+		t.Fatalf("expected count 1, got %d", env.Count)
+	}
+
+	items, ok := env.Items.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected items to be map, got %T", env.Items)
+	}
+	if _, ok := items["moments"]; !ok {
+		t.Error("expected items to contain moments")
+	}
+	if _, ok := items["moments_media"]; !ok {
+		t.Error("expected items to contain moments_media")
+	}
+}
+
+func TestExportModuleFriendRss(t *testing.T) {
+	db := newTestDB(t)
+	feed := model.FriendRss{Name: "Test Feed", RssURL: "https://example.com/feed.xml"}
+	if err := db.Create(&feed).Error; err != nil {
+		t.Fatal(err)
+	}
+	post := model.RssPost{RssID: feed.ID, Title: "Post"}
+	if err := db.Create(&post).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := ExportModule(db, "friend_rss", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Module != "friend_rss" {
+		t.Fatalf("expected module friend_rss, got %s", env.Module)
+	}
+	if env.Count != 1 {
+		t.Fatalf("expected count 1, got %d", env.Count)
+	}
+
+	items, ok := env.Items.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected items to be map, got %T", env.Items)
+	}
+	if _, ok := items["friend_rss"]; !ok {
+		t.Error("expected items to contain friend_rss")
+	}
+	if _, ok := items["friend_rss_post"]; !ok {
+		t.Error("expected items to contain friend_rss_post")
 	}
 }

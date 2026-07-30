@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -248,16 +249,18 @@ func exportSystemConfig(dataDir string) (*model.ExportEnvelope, error) {
 }
 
 func exportTable(db *gorm.DB, module string, tableModel interface{}) (*model.ExportEnvelope, error) {
-	var items []map[string]interface{}
-	if err := db.Model(tableModel).Find(&items).Error; err != nil {
+	modelType := reflect.TypeOf(tableModel).Elem()
+	results := reflect.New(reflect.SliceOf(modelType)).Interface()
+	if err := db.Find(results).Error; err != nil {
 		return nil, err
 	}
+	count := reflect.ValueOf(results).Elem().Len()
 	return &model.ExportEnvelope{
 		Version:    "1.0",
 		Module:     module,
 		ExportedAt: time.Now().UTC().Format(time.RFC3339),
-		Count:      len(items),
-		Items:      items,
+		Count:      count,
+		Items:      reflect.ValueOf(results).Elem().Interface(),
 	}, nil
 }
 
