@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"blog_api/src/model"
+	"gorm.io/gorm"
 )
 
 // ExportDataDir writes the contents of dataDir into w as a zip archive.
@@ -204,4 +208,97 @@ func extractZip(zr *zip.Reader, dst string) error {
 		}
 	}
 	return nil
+}
+
+// ExportModule exports a single module as an ExportEnvelope.
+func ExportModule(db *gorm.DB, module string, dataDir string) (*model.ExportEnvelope, error) {
+	switch module {
+	case "system_config":
+		return exportSystemConfig(dataDir)
+	case "friend_links":
+		return exportTable(db, module, &model.FriendWebsite{})
+	case "moments":
+		return exportMoments(db)
+	case "friend_rss":
+		return exportFriendRss(db)
+	case "images":
+		return exportTable(db, module, &model.Image{})
+	default:
+		return nil, fmt.Errorf("unknown module: %s", module)
+	}
+}
+
+func exportSystemConfig(dataDir string) (*model.ExportEnvelope, error) {
+	path := filepath.Join(dataDir, "config", "system_config.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg map[string]interface{}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &model.ExportEnvelope{
+		Version:    "1.0",
+		Module:     "system_config",
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+		Count:      1,
+		Items:      cfg,
+	}, nil
+}
+
+func exportTable(db *gorm.DB, module string, tableModel interface{}) (*model.ExportEnvelope, error) {
+	var items []map[string]interface{}
+	if err := db.Model(tableModel).Find(&items).Error; err != nil {
+		return nil, err
+	}
+	return &model.ExportEnvelope{
+		Version:    "1.0",
+		Module:     module,
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+		Count:      len(items),
+		Items:      items,
+	}, nil
+}
+
+func exportMoments(db *gorm.DB) (*model.ExportEnvelope, error) {
+	var moments []model.Moment
+	if err := db.Find(&moments).Error; err != nil {
+		return nil, err
+	}
+	var media []model.MomentMedia
+	if err := db.Find(&media).Error; err != nil {
+		return nil, err
+	}
+	return &model.ExportEnvelope{
+		Version:    "1.0",
+		Module:     "moments",
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+		Count:      len(moments),
+		Items: map[string]interface{}{
+			"moments":       moments,
+			"moments_media": media,
+		},
+	}, nil
+}
+
+func exportFriendRss(db *gorm.DB) (*model.ExportEnvelope, error) {
+	var feeds []model.FriendRss
+	if err := db.Find(&feeds).Error; err != nil {
+		return nil, err
+	}
+	var posts []model.RssPost
+	if err := db.Find(&posts).Error; err != nil {
+		return nil, err
+	}
+	return &model.ExportEnvelope{
+		Version:    "1.0",
+		Module:     "friend_rss",
+		ExportedAt: time.Now().UTC().Format(time.RFC3339),
+		Count:      len(feeds),
+		Items: map[string]interface{}{
+			"friend_rss":      feeds,
+			"friend_rss_post": posts,
+		},
+	}, nil
 }

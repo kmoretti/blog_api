@@ -138,3 +138,22 @@ func TestExtractZip_ZipSlip(t *testing.T) {
 		t.Fatalf("zip-slip file was created outside destination: %v", err)
 	}
 }
+
+func TestExportModuleSystemConfig(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "system_config.json"), []byte(`{"site":"test"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := ExportModule(nil, "system_config", tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Module != "system_config" {
+		t.Fatalf("expected module system_config, got %s", env.Module)
+	}
+}
