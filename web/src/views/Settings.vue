@@ -442,6 +442,81 @@
           </el-form>
         </el-tab-pane>
 
+        <el-tab-pane label="数据迁移" name="migration">
+          <el-card shadow="never" style="margin-bottom: 20px">
+            <template #header>完整备份</template>
+            <el-alert
+              title="完整备份会打包整个 data/ 目录（数据库、配置、图片、资源）。"
+              type="info"
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
+            <el-button type="primary" :loading="exportingFull" @click="handleExportFull">导出备份</el-button>
+            <el-divider />
+            <el-form label-width="120px">
+              <el-form-item label="恢复备份">
+                <el-upload
+                  ref="fullRestoreUploadRef"
+                  :auto-upload="false"
+                  :limit="1"
+                  :on-change="(file) => { if (file.status !== 'removed' && file.raw) fullRestoreFile.value = file.raw }"
+                  accept=".zip"
+                >
+                  <el-button>选择 ZIP</el-button>
+                </el-upload>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="danger" :loading="importingFull" @click="handleImportFull">恢复备份</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+
+          <el-card shadow="never">
+            <template #header>模块数据迁移</template>
+            <el-alert
+              title="导出/导入 JSON 用于迁移业务数据。导入时主键冲突可选替换或跳过。"
+              type="info"
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
+            <el-form label-width="120px">
+              <el-form-item label="模块">
+                <el-select v-model="selectedModule" style="width: 200px">
+                  <el-option
+                    v-for="m in BACKUP_MODULES"
+                    :key="m.key"
+                    :label="m.label"
+                    :value="m.key"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="策略">
+                <el-radio-group v-model="importStrategy">
+                  <el-radio label="replace">替换冲突</el-radio>
+                  <el-radio label="skip">跳过冲突</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <el-form-item>
+                <el-button @click="handleExportModule(selectedModule)">导出 JSON</el-button>
+              </el-form-item>
+              <el-form-item label="导入 JSON">
+                <el-upload
+                  ref="moduleImportUploadRef"
+                  :auto-upload="false"
+                  :limit="1"
+                  :on-change="(file) => { if (file.status !== 'removed' && file.raw) moduleImportFile.value = file.raw }"
+                  accept=".json"
+                >
+                  <el-button>选择 JSON</el-button>
+                </el-upload>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :loading="importingModule" @click="handleImportModule">导入</el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </el-tab-pane>
+
         <el-tab-pane label="危险区域" name="danger">
           <div class="danger-zone">
             <div class="danger-zone__content">
@@ -463,16 +538,33 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadInstance } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { getSystemConfig, restartSystem, updateSystemConfig } from '@/api/config'
 import type { SystemConfig } from '@/model/config'
 import { usePwa } from '@/composables/usePwa'
+import {
+  exportFullBackup,
+  importFullBackup,
+  exportModule,
+  importModule,
+} from '@/api/backup'
+import { BACKUP_MODULES, type BackupModule, type ImportStrategy } from '@/model/backup'
 
 const { pwaEnabled, canInstall, install: installPwa } = usePwa()
 
 const activeTab = ref('safe')
 const saving = ref(false)
 const restarting = ref(false)
+const importingFull = ref(false)
+const exportingFull = ref(false)
+const fullRestoreFile = ref<File | null>(null)
+const fullRestoreUploadRef = ref<UploadInstance | null>(null)
+const moduleImportFile = ref<File | null>(null)
+const moduleImportUploadRef = ref<UploadInstance | null>(null)
+const selectedModule = ref<BackupModule>('friend_links')
+const importStrategy = ref<ImportStrategy>('replace')
+const importingModule = ref(false)
 const newCorsHost = ref('')
 const newExcludePath = ref('')
 const newAllowExtension = ref('')
@@ -832,6 +924,124 @@ const handleRestart = async () => {
     window.setTimeout(() => {
       restarting.value = false
     }, 3000)
+  }
+}
+
+const formatBackupDate = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 100)
+}
+
+const formatBackupError = async (error: any, fallback: string): Promise<string> => {
+  const data = error?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text()
+      try {
+        const parsed = JSON.parse(text)
+        return parsed.message || parsed.msg || text || fallback
+      } catch {
+        return text || fallback
+      }
+    } catch {
+      return fallback
+    }
+  }
+  return data?.message || error?.message || fallback
+}
+
+const handleExportFull = async () => {
+  exportingFull.value = true
+  try {
+    const blob = await exportFullBackup()
+    downloadBlob(blob, `blog_api_backup_${formatBackupDate()}.zip`)
+    ElMessage.success('备份下载已开始')
+  } catch (error) {
+    ElMessage.error(await formatBackupError(error, '导出备份失败'))
+    console.error(error)
+  } finally {
+    exportingFull.value = false
+  }
+}
+
+const handleImportFull = async () => {
+  if (!fullRestoreFile.value) {
+    ElMessage.warning('请选择备份文件')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '恢复备份会覆盖当前 data/ 目录，操作后需要重启服务。是否继续？',
+      '警告',
+      { confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning' }
+    )
+    importingFull.value = true
+    const res = await importFullBackup(fullRestoreFile.value)
+    ElMessage.success(res.message)
+    ElMessage.warning('备份已恢复，请前往「危险区域」重启服务以完成数据加载')
+    fullRestoreFile.value = null
+    fullRestoreUploadRef.value?.clearFiles()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(await formatBackupError(error, '恢复备份失败'))
+      console.error(error)
+    }
+  } finally {
+    importingFull.value = false
+  }
+}
+
+const handleExportModule = async (module: BackupModule) => {
+  try {
+    const blob = await exportModule(module)
+    downloadBlob(blob, `${module}_${formatBackupDate()}.json`)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error(await formatBackupError(error, '导出失败'))
+    console.error(error)
+  }
+}
+
+const handleImportModule = async () => {
+  if (!moduleImportFile.value) {
+    ElMessage.warning('请选择 JSON 文件')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将以「${importStrategy.value === 'replace' ? '替换冲突' : '跳过冲突'}」策略导入 ${selectedModule.value}，是否继续？`,
+      '确认导入',
+      { confirmButtonText: '继续', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('导入失败')
+      console.error(error)
+    }
+    return
+  }
+
+  importingModule.value = true
+  try {
+    const res = await importModule(selectedModule.value, moduleImportFile.value, importStrategy.value)
+    ElMessage.success(
+      `导入完成：新增 ${res.data.imported} 条，替换 ${res.data.replaced} 条，跳过 ${res.data.skipped} 条`
+    )
+    moduleImportFile.value = null
+    moduleImportUploadRef.value?.clearFiles()
+  } catch (error) {
+    ElMessage.error(await formatBackupError(error, '导入失败'))
+    console.error(error)
+  } finally {
+    importingModule.value = false
   }
 }
 </script>
