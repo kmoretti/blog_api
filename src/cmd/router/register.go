@@ -16,9 +16,13 @@ import (
 	"gorm.io/gorm"
 )
 
-func limitLargeUploadBodySize(c *gin.Context) {
+const multipartOverheadBytes = 10 << 20 // 10 MB headroom for multipart boundaries/headers
+
+func limitUploadBodySize(c *gin.Context) {
 	if c.Request.Body != nil {
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, backupHandler.MaxBackupSize)
+		// Allow extra headroom for multipart boundaries/headers while the handler
+		// enforces the strict file-content limit.
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, backupHandler.MaxBackupSize+multipartOverheadBytes)
 	}
 	c.Next()
 }
@@ -162,15 +166,14 @@ func registerRoutes(router *gin.Engine, db *gorm.DB, cfg *model.Config, startTim
 			}
 			backupActionGroup := actionGroup.Group("/backup")
 			{
-				backupActionGroup.Use(limitLargeUploadBodySize)
 				backupActionGroup.POST("/export", backupHandlerInstance.ExportFullBackup)
-				backupActionGroup.POST("/import", backupHandlerInstance.ImportFullBackup)
+				backupActionGroup.POST("/import", limitUploadBodySize, backupHandlerInstance.ImportFullBackup)
 			}
+
 			importActionGroup := actionGroup.Group("/import")
-			{
-				importActionGroup.Use(limitLargeUploadBodySize)
-				importActionGroup.POST("/:module", backupHandlerInstance.ImportModule)
-			}
+			importActionGroup.Use(limitUploadBodySize)
+			importActionGroup.POST("/:module", backupHandlerInstance.ImportModule)
+
 			actionGroup.GET("/export/:module", backupHandlerInstance.ExportModule)
 		}
 	}

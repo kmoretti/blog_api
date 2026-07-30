@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,7 +40,11 @@ func (h *Handler) ExportFullBackup(c *gin.Context) {
 func (h *Handler) ImportFullBackup(c *gin.Context) {
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "missing file"))
+		if strings.Contains(err.Error(), "request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, model.NewErrorResponse(413, "request body too large"))
+		} else {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "missing file"))
+		}
 		return
 	}
 	defer file.Close()
@@ -58,7 +63,7 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 	bak, err := backupSvc.ImportDataDir(h.DataDir, bytes.NewReader(data))
 	if err != nil {
 		log.Printf("[backup] import failed: %v", err)
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, err.Error()))
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "import failed"))
 		return
 	}
 
@@ -90,7 +95,11 @@ func (h *Handler) ImportModule(c *gin.Context) {
 
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "missing file"))
+		if strings.Contains(err.Error(), "request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, model.NewErrorResponse(413, "request body too large"))
+		} else {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "missing file"))
+		}
 		return
 	}
 	defer file.Close()
@@ -115,7 +124,7 @@ func (h *Handler) ImportModule(c *gin.Context) {
 	result, err := backupSvc.ImportModule(h.DB, module, &env, strategy, h.DataDir)
 	if err != nil {
 		log.Printf("[backup] import module %s failed: %v", module, err)
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, err.Error()))
+		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "import failed"))
 		return
 	}
 
