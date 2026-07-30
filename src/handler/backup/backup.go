@@ -2,7 +2,7 @@ package backup
 
 import (
 	"blog_api/src/model"
-	"blog_api/src/service/backup"
+	backupSvc "blog_api/src/service/backup"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,10 +24,10 @@ type Handler struct {
 
 // ExportFullBackup streams a zip of the data directory.
 func (h *Handler) ExportFullBackup(c *gin.Context) {
-	filename := backup.BackupFilename("blog_api_backup")
+	filename := backupSvc.BackupFilename("blog_api_backup")
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-	if err := backup.ExportDataDir(h.DataDir, c.Writer); err != nil {
+	if err := backupSvc.ExportDataDir(h.DataDir, c.Writer); err != nil {
 		log.Printf("[backup] export failed: %v", err)
 		// headers already sent; cannot change status
 		return
@@ -43,7 +43,7 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 	}
 	defer file.Close()
 
-	bak, err := backup.ImportDataDir(h.DataDir, file)
+	bak, err := backupSvc.ImportDataDir(h.DataDir, file)
 	if err != nil {
 		log.Printf("[backup] import failed: %v", err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, err.Error()))
@@ -59,7 +59,7 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 // ExportModule exports a single module as JSON.
 func (h *Handler) ExportModule(c *gin.Context) {
 	module := c.Param("module")
-	env, err := backup.ExportModule(h.DB, module, h.DataDir)
+	env, err := backupSvc.ExportModule(h.DB, module, h.DataDir)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, err.Error()))
 		return
@@ -95,7 +95,7 @@ func (h *Handler) ImportModule(c *gin.Context) {
 		return
 	}
 
-	result, err := backup.ImportModule(h.DB, module, &env, strategy, h.DataDir)
+	result, err := backupSvc.ImportModule(h.DB, module, &env, strategy, h.DataDir)
 	if err != nil {
 		log.Printf("[backup] import module %s failed: %v", module, err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, err.Error()))
