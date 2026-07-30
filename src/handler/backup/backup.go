@@ -63,8 +63,14 @@ func (h *Handler) ImportFullBackup(c *gin.Context) {
 
 	bak, err := backupSvc.ImportDataDir(h.DataDir, h.DatabasePath, bytes.NewReader(data))
 	if err != nil {
-		log.Printf("[backup] import failed: %v", err)
-		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "import failed"))
+		log.Printf("[backup] import failed (dataDir=%s, databasePath=%s): %v", h.DataDir, h.DatabasePath, err)
+		msg := "import failed"
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "backup archive missing") {
+			status = http.StatusBadRequest
+			msg = "备份文件缺少数据库文件，请使用本系统导出的完整备份"
+		}
+		c.JSON(status, model.NewErrorResponse(status, msg))
 		return
 	}
 
@@ -79,6 +85,7 @@ func (h *Handler) ExportModule(c *gin.Context) {
 	module := c.Param("module")
 	env, err := backupSvc.ExportModule(h.DB, module, h.DataDir)
 	if err != nil {
+		log.Printf("[backup] export module %s failed: %v", module, err)
 		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, err.Error()))
 		return
 	}
