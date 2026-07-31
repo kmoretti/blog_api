@@ -48,7 +48,7 @@
             </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
-                <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
+                <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column prop="updated_at" label="更新时间" width="180">
@@ -68,15 +68,20 @@
             </el-table-column>
             <el-table-column prop="snapshot" label="封面" width="180">
               <template #default="{ row }">
-                <el-image v-if="row.snapshot" :src="row.snapshot" fit="cover" style="width: 80px; height: 45px; border-radius: 4px;" />
+                <el-image v-if="isSafeUrl(row.snapshot)" :src="row.snapshot" fit="cover" :lazy="true" style="width: 80px; height: 45px; border-radius: 4px;">
+                  <template #error><span>-</span></template>
+                </el-image>
                 <span v-else>-</span>
               </template>
             </el-table-column>
             <el-table-column prop="feed" label="RSS" width="200">
               <template #default="{ row }">
-                <a v-if="row.feed" :href="row.feed" target="_blank" style="color: var(--el-color-primary);">{{ row.feed }}</a>
+                <a v-if="isSafeUrl(row.feed)" :href="row.feed" target="_blank" rel="noopener noreferrer" style="color: var(--el-color-primary);">{{ row.feed }}</a>
                 <span v-else>-</span>
               </template>
+            </el-table-column>
+            <el-table-column prop="rejection_reason" label="拒绝理由" width="220">
+              <template #default="{ row }">{{ row.rejection_reason || '-' }}</template>
             </el-table-column>
             <el-table-column label="操作" width="260" fixed="right">
               <template #default="{ row }">
@@ -172,7 +177,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">确定</el-button>
+        <el-button type="primary" :loading="saving" :disabled="saving" @click="submitForm">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -203,6 +208,7 @@ const filterIsDied = ref<boolean | null>(null)
 const searchQuery = ref('')
 const dialogVisible = ref(false)
 const isEditMode = ref(false)
+const saving = ref(false)
 const formRef = ref<FormInstance>()
 const form = reactive<{
   id: number
@@ -244,8 +250,38 @@ const form = reactive<{
 
 const rules = reactive<FormRules>({
   name: [{ required: true, message: '请输入网站名称', trigger: 'blur' }],
-  link: [{ required: true, message: '请输入网站链接', trigger: 'blur' }]
+  link: [
+    { required: true, message: '请输入网站链接', trigger: 'blur' },
+    { validator: (_rule, value, callback) => validateHttpUrl(value, callback), trigger: 'blur' }
+  ],
+  avatar: [
+    { required: true, message: '请输入网站图标地址', trigger: 'blur' },
+    { validator: (_rule, value, callback) => validateHttpUrl(value, callback), trigger: 'blur' }
+  ],
+  email: [{ validator: (_rule, value, callback) => validateEmail(value, callback), trigger: 'blur' }],
+  feed: [{ validator: (_rule, value, callback) => validateOptionalHttpUrl(value, callback), trigger: 'blur' }],
+  friend_link_page: [{ validator: (_rule, value, callback) => validateOptionalHttpUrl(value, callback), trigger: 'blur' }],
+  snapshot: [{ validator: (_rule, value, callback) => validateOptionalHttpUrl(value, callback), trigger: 'blur' }]
 })
+
+const isSafeUrl = (value?: string) => {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+const validateHttpUrl = (value: string, callback: (error?: Error) => void) => {
+  callback(isSafeUrl(value) ? undefined : new Error('请输入有效的 HTTP(S) 地址'))
+}
+const validateOptionalHttpUrl = (value: string, callback: (error?: Error) => void) => {
+  callback(!value || isSafeUrl(value) ? undefined : new Error('请输入有效的 HTTP(S) 地址'))
+}
+const validateEmail = (value: string, callback: (error?: Error) => void) => {
+  callback(!value || /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) ? undefined : new Error('请输入有效的邮箱地址'))
+}
 
 // Pagination
 const { currentPage, pageSize, total, handlePageChange, handleSizeChange, reset } = usePagination(
@@ -295,9 +331,25 @@ const handleSearch = () => {
 const openFormDialog = (link?: FriendLink) => {
   if (link) {
     isEditMode.value = true
-    Object.assign(form, link)
-    form.color = link.color || ''
-    form.tags = link.tags || []
+    Object.assign(form, {
+      id: link.id,
+      name: link.name,
+      link: link.link,
+      avatar: link.avatar,
+      description: link.description,
+      email: link.email || '',
+      times: link.times ?? 0,
+      status: link.status,
+      enable_rss: link.enable_rss,
+      skip_health_check: link.skip_health_check,
+      snapshot: link.snapshot || '',
+      friend_link_page: link.friend_link_page || '',
+      feed: link.feed || '',
+      is_died: link.is_died ?? false,
+      rejection_reason: link.rejection_reason || '',
+      color: link.color || '',
+      tags: link.tags || []
+    })
   } else {
     isEditMode.value = false
   }
@@ -328,11 +380,12 @@ const resetForm = () => {
 }
 
 const submitForm = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        if (isEditMode.value) {
+  if (!formRef.value || saving.value) return
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+  saving.value = true
+  try {
+    if (isEditMode.value) {
           const { id, ...data } = form
           await updateFriendLink(id, { data })
           ElMessage.success('更新成功')
@@ -353,13 +406,13 @@ const submitForm = async () => {
           await createFriendLink(payload)
           ElMessage.success('创建成功')
         }
-        dialogVisible.value = false
-        fetchFriendLinks()
-      } catch (error) {
-        ElMessage.error(isEditMode.value ? '更新失败' : '创建失败')
-      }
-    }
-  })
+    dialogVisible.value = false
+    await fetchFriendLinks()
+  } catch (error) {
+    ElMessage.error(isEditMode.value ? '更新失败，请稍后重试' : '创建失败，请稍后重试')
+  } finally {
+    saving.value = false
+  }
 }
 
 // Delete operations
@@ -393,6 +446,14 @@ const handleRecheck = async (id: number) => {
 }
 
 // UI Helpers
+const statusLabel = (status: string) => ({
+  survival: '正常',
+  timeout: '超时',
+  error: '错误',
+  pending: '待审核',
+  rejected: '已拒绝'
+}[status] || status)
+
 const statusTagType = (status: string) => {
   switch (status) {
     case 'survival':

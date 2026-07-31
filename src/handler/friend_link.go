@@ -28,19 +28,21 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 	dtoLinks := make([]model.FriendLinkDTO, 0, len(links))
 	for _, link := range links {
 		dto := model.FriendLinkDTO{
-			ID:             link.ID,
-			Name:           link.Name,
-			Link:           link.Link,
-			Avatar:         link.Avatar,
-			Description:    link.Info,
-			Status:         link.Status,
-			EnableRss:      link.EnableRss,
-			UpdatedAt:      link.UpdatedAt,
-			Snapshot:       link.Snapshot,
-			FriendLinkPage: link.FriendLinkPage,
-			Feed:           link.Feed,
-			Color:          link.Color,
-			Tags:           link.Tags,
+			ID:              link.ID,
+			Name:            link.Name,
+			Link:            link.Link,
+			Avatar:          link.Avatar,
+			Description:     link.Info,
+			Status:          link.Status,
+			EnableRss:       link.EnableRss,
+			UpdatedAt:       link.UpdatedAt,
+			Snapshot:        link.Snapshot,
+			FriendLinkPage:  link.FriendLinkPage,
+			Feed:            link.Feed,
+			Color:           link.Color,
+			Tags:            link.Tags,
+			Rss:             link.Rss,
+			RejectionReason: link.RejectionReason,
 		}
 		if isPrivate {
 			dto.Email = link.Email
@@ -56,19 +58,21 @@ func toFriendLinkDTOs(links []model.FriendWebsite, isPrivate bool) []model.Frien
 
 func toFriendLinkDTO(link model.FriendWebsite, isPrivate bool) model.FriendLinkDTO {
 	dto := model.FriendLinkDTO{
-		ID:             link.ID,
-		Name:           link.Name,
-		Link:           link.Link,
-		Avatar:         link.Avatar,
-		Description:    link.Info,
-		Status:         link.Status,
-		EnableRss:      link.EnableRss,
-		UpdatedAt:      link.UpdatedAt,
-		Snapshot:       link.Snapshot,
-		FriendLinkPage: link.FriendLinkPage,
-		Feed:           link.Feed,
-		Color:          link.Color,
-		Tags:           link.Tags,
+		ID:              link.ID,
+		Name:            link.Name,
+		Link:            link.Link,
+		Avatar:          link.Avatar,
+		Description:     link.Info,
+		Status:          link.Status,
+		EnableRss:       link.EnableRss,
+		UpdatedAt:       link.UpdatedAt,
+		Snapshot:        link.Snapshot,
+		FriendLinkPage:  link.FriendLinkPage,
+		Feed:            link.Feed,
+		Color:           link.Color,
+		Tags:            link.Tags,
+		Rss:             link.Rss,
+		RejectionReason: link.RejectionReason,
 	}
 	if isPrivate {
 		dto.Email = link.Email
@@ -356,10 +360,10 @@ func (h *FriendLinkHandler) UpdateApplyFriendLink(c *gin.Context) {
 	go service.NotifyFriendLinkApplication(submission)
 
 	c.JSON(http.StatusCreated, model.NewSuccessResponseWithCode(http.StatusCreated, gin.H{
-		"id":           id,
-		"original_id":  existing.ID,
-		"status":       "pending",
-		"message":      "友链更新申请已提交，等待管理员审核",
+		"id":          id,
+		"original_id": existing.ID,
+		"status":      "pending",
+		"message":     "友链更新申请已提交，等待管理员审核",
 	}))
 
 	fcircle.ScheduleRegenerate()

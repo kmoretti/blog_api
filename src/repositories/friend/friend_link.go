@@ -111,7 +111,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 	if opts.Offset > 0 {
 		query = query.Offset(opts.Offset)
 	}
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, tags"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, rejection_reason, tags"
 	if err := query.Select(selectFields).Find(&resp.Links).Error; err != nil {
 		return resp, err
 	}
@@ -122,7 +122,7 @@ func QueryFriendLinks(db *gorm.DB, opts model.FriendLinkQueryOptions) (model.Que
 // GetFriendLinkByID fetches a single friend link by ID.
 func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, tags"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, rejection_reason, tags"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("id = ?", id).First(&link).Error
 	return link, err
 }
@@ -130,7 +130,7 @@ func GetFriendLinkByID(db *gorm.DB, id int) (model.FriendWebsite, error) {
 // GetFriendLinkByEmail fetches a single friend link by email.
 func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, tags"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, rejection_reason, tags"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("email = ?", email).First(&link).Error
 	return link, err
 }
@@ -138,7 +138,7 @@ func GetFriendLinkByEmail(db *gorm.DB, email string) (model.FriendWebsite, error
 // GetFriendLinkByLink fetches a single friend link by its normalized URL.
 func GetFriendLinkByLink(db *gorm.DB, linkURL string) (model.FriendWebsite, error) {
 	var link model.FriendWebsite
-	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, tags"
+	selectFields := "id, website_name, website_url, website_icon_url, description, email, times, status, is_died, enable_rss, skip_health_check, updated_at, snapshot, friend_link_page, feed, color, rss, rejection_reason, tags"
 	err := db.Model(&model.FriendWebsite{}).Select(selectFields).Where("website_url = ?", linkURL).First(&link).Error
 	return link, err
 }

@@ -37,6 +37,43 @@ func TestUpdateFriendLinkByID_SerializesTagsAsJSON(t *testing.T) {
 	}
 }
 
+func TestUpdateFriendLinkByID_PreservesExistingValuesAndUpdatesRssFields(t *testing.T) {
+	db := testutil.NewTestDB(t)
+	link := model.FriendWebsite{
+		Name:            "Original",
+		Link:            "https://original.test",
+		Avatar:          "https://original.test/avatar.png",
+		Rss:             "https://original.test/rss.xml",
+		RejectionReason: "old reason",
+	}
+	if err := db.Create(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := UpdateFriendLinkByID(db, uint(link.ID), model.EditFriendLinkReq{Data: map[string]interface{}{
+		"rss":              "https://original.test/new-rss.xml",
+		"rejection_reason": "new reason",
+		"description":      "",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("expected 1 row affected, got %d", rows)
+	}
+
+	updated, err := GetFriendLinkByID(db, link.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Rss != "https://original.test/new-rss.xml" || updated.RejectionReason != "new reason" {
+		t.Fatalf("expected RSS and rejection reason to update, got %#v", updated)
+	}
+	if updated.Name != link.Name || updated.Avatar != link.Avatar {
+		t.Fatalf("expected omitted values to be preserved, got %#v", updated)
+	}
+}
+
 func TestStringSliceToleratesInvalidJSON(t *testing.T) {
 	db := testutil.NewTestDB(t)
 	link := model.FriendWebsite{Name: "B", Link: "https://b.test"}
