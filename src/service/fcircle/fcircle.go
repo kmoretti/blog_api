@@ -158,7 +158,7 @@ func buildFriendJSON(db *gorm.DB, links []model.FriendWebsite) (map[string]inter
 		groupIndex[defaultID] = len(outputs)
 		outputs = append(outputs, model.FriendLinkGroupOutput{
 			Name:  "网上邻居",
-			Desc:  "",
+			Desc:  "我的网上邻居~",
 			Links: make([]model.FriendLinkInGroup, 0),
 		})
 	}

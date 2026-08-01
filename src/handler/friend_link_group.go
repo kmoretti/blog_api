@@ -67,7 +67,7 @@ func (h *FriendLinkGroupHandler) UpdateFriendLinkGroup(c *gin.Context) {
 		return
 	}
 	if err := friendsRepositories.UpdateFriendLinkGroup(h.DB, id, &req); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, friendsRepositories.ErrFriendLinkGroupNotFound) {
 			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link group not found"))
 			return
 		}
@@ -87,6 +87,10 @@ func (h *FriendLinkGroupHandler) DeleteFriendLinkGroup(c *gin.Context) {
 		return
 	}
 	if err := friendsRepositories.DeleteFriendLinkGroup(h.DB, id); err != nil {
+		if errors.Is(err, friendsRepositories.ErrFriendLinkGroupNotFound) {
+			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link group not found"))
+			return
+		}
 		log.Printf("[handler][friend_group] failed to delete group: %v", err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to delete friend link group"))
 		return
@@ -134,6 +138,14 @@ func (h *FriendLinkGroupHandler) SetFriendLinkGroups(c *gin.Context) {
 	}
 
 	if err := friendsRepositories.SetFriendLinkGroups(h.DB, linkID, groupIDs); err != nil {
+		if errors.Is(err, friendsRepositories.ErrInvalidFriendLinkGroupID) {
+			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "invalid friend link group id"))
+			return
+		}
+		if errors.Is(err, friendsRepositories.ErrFriendLinkGroupNotFound) {
+			c.JSON(http.StatusNotFound, model.NewErrorResponse(404, "friend link group not found"))
+			return
+		}
 		log.Printf("[handler][friend_group] failed to set groups: %v", err)
 		c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "failed to update friend link groups"))
 		return

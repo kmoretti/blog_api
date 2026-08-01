@@ -10,7 +10,15 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultGroupName = "网上邻居"
+const (
+	defaultGroupName        = "网上邻居"
+	defaultGroupDescription = "我的网上邻居~"
+)
+
+var (
+	ErrFriendLinkGroupNotFound  = errors.New("friend link group not found")
+	ErrInvalidFriendLinkGroupID = errors.New("invalid friend link group id")
+)
 
 // EnsureDefaultFriendLinkGroup creates the default group if it does not exist.
 // It returns the default group ID.
@@ -18,6 +26,11 @@ func EnsureDefaultFriendLinkGroup(db *gorm.DB) (int, error) {
 	var group model.FriendLinkGroup
 	err := db.Where("name = ?", defaultGroupName).First(&group).Error
 	if err == nil {
+		if group.Description == "" {
+			if err := db.Model(&group).Update("description", defaultGroupDescription).Error; err != nil {
+				return 0, err
+			}
+		}
 		return group.ID, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -27,7 +40,7 @@ func EnsureDefaultFriendLinkGroup(db *gorm.DB) (int, error) {
 	now := time.Now().Unix()
 	group = model.FriendLinkGroup{
 		Name:        defaultGroupName,
-		Description: "",
+		Description: defaultGroupDescription,
 		SortOrder:   0,
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -63,17 +76,31 @@ func UpdateFriendLinkGroup(db *gorm.DB, id int, group *model.FriendLinkGroup) er
 		"sort_order":  group.SortOrder,
 		"updated_at":  time.Now().Unix(),
 	}
-	return db.Model(&model.FriendLinkGroup{}).Where("id = ?", id).Updates(updates).Error
+	result := db.Model(&model.FriendLinkGroup{}).Where("id = ?", id).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrFriendLinkGroupNotFound
+	}
+	return nil
 }
 
 // DeleteFriendLinkGroup deletes a friend link group and removes its mappings.
 // Members are not deleted; they become ungrouped and will fall into the default group.
 func DeleteFriendLinkGroup(db *gorm.DB, id int) error {
 	return db.Transaction(func(tx *gorm.DB) error {
+		var group model.FriendLinkGroup
+		if err := tx.Where("id = ?", id).First(&group).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrFriendLinkGroupNotFound
+			}
+			return err
+		}
 		if err := tx.Where("friend_link_group_id = ?", id).Delete(&model.FriendLinkGroupMapping{}).Error; err != nil {
 			return err
 		}
-		return tx.Where("id = ?", id).Delete(&model.FriendLinkGroup{}).Error
+		return tx.Delete(&group).Error
 	})
 }
 
@@ -97,17 +124,18 @@ func SetFriendLinkGroups(db *gorm.DB, friendLinkID int, groupIDs []int) error {
 		return fmt.Errorf("invalid friend link id")
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("friend_link_id = ?", friendLinkID).Delete(&model.FriendLinkGroupMapping{}).Error; err != nil {
-			return err
-		}
-		if len(groupIDs) == 0 {
-			return nil
-		}
 		mappings := make([]model.FriendLinkGroupMapping, 0, len(groupIDs))
 		seen := make(map[int]struct{}, len(groupIDs))
 		for _, gid := range groupIDs {
 			if gid <= 0 {
-				continue
+				return ErrInvalidFriendLinkGroupID
+			}
+			var count int64
+			if err := tx.Model(&model.FriendLinkGroup{}).Where("id = ?", gid).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				return ErrFriendLinkGroupNotFound
 			}
 			if _, ok := seen[gid]; ok {
 				continue
@@ -117,6 +145,9 @@ func SetFriendLinkGroups(db *gorm.DB, friendLinkID int, groupIDs []int) error {
 				FriendLinkID:      friendLinkID,
 				FriendLinkGroupID: gid,
 			})
+		}
+		if err := tx.Where("friend_link_id = ?", friendLinkID).Delete(&model.FriendLinkGroupMapping{}).Error; err != nil {
+			return err
 		}
 		if len(mappings) == 0 {
 			return nil

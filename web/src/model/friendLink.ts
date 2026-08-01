@@ -22,6 +22,25 @@ export interface FriendLink {
   tags?: string[]
 }
 
+export interface FriendLinkGroup {
+  id: number
+  name: string
+  description: string
+  sort_order: number
+  created_at: number
+  updated_at: number
+}
+
+export interface FriendLinkGroupPayload {
+  name: string
+  description?: string
+  sort_order?: number
+}
+
+export interface FriendLinkGroupIDs {
+  group_ids: number[]
+}
+
 /**
  * 分页查询参数
  */
