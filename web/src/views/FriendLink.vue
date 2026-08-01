@@ -322,7 +322,7 @@ const validateOptionalHttpUrl = (value: string, callback: (error?: Error) => voi
   callback(!value || isSafeUrl(value) ? undefined : new Error('请输入有效的 HTTP(S) 地址'))
 }
 const validateEmail = (value: string, callback: (error?: Error) => void) => {
-  callback(!value || /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value) ? undefined : new Error('请输入有效的邮箱地址'))
+  callback(!value || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? undefined : new Error('请输入有效的邮箱地址'))
 }
 
 // Pagination
