@@ -4,9 +4,12 @@
       <template #header>
         <div class="card-header">
           <span>友链管理</span>
-          <el-button type="primary" :icon="Plus" @click="openFormDialog()">
-            新增友链
-          </el-button>
+          <div>
+            <el-button :icon="Edit" @click="openGroupDialog">分组管理</el-button>
+            <el-button type="primary" :icon="Plus" @click="openFormDialog()">
+              新增友链
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -36,7 +39,8 @@
             <el-table-column prop="name" label="网站名称" width="180" />
             <el-table-column prop="link" label="链接">
               <template #default="{ row }">
-                <a :href="row.link" target="_blank">{{ row.link }}</a>
+                <a v-if="isSafeUrl(row.link)" :href="row.link" target="_blank" rel="noopener noreferrer">{{ row.link }}</a>
+                <span v-else>-</span>
               </template>
             </el-table-column>
             <el-table-column prop="email" label="邮箱" width="200" />
@@ -156,6 +160,11 @@
             style="width: 100%"
           />
         </el-form-item>
+        <el-form-item label="分组">
+          <el-select v-model="form.group_ids" multiple filterable placeholder="请选择分组" style="width: 100%">
+            <el-option v-for="group in groups" :key="group.id" :label="group.name" :value="group.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="是否失效" prop="is_died" v-if="isEditMode">
           <el-switch v-model="form.is_died" />
         </el-form-item>
@@ -177,8 +186,28 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" :disabled="saving" @click="submitForm">确定</el-button>
+        <el-button type="primary" :loading="saving" :disabled="saving || editGroupsLoadFailed" @click="submitForm">确定</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="groupDialogVisible" title="友链分组管理" width="620px">
+      <div class="group-create-row">
+        <el-input v-model="groupForm.name" placeholder="分组名称" />
+        <el-input v-model="groupForm.description" placeholder="分组描述" />
+        <el-input-number v-model="groupForm.sort_order" :min="0" />
+        <el-button type="primary" @click="saveGroup">{{ groupForm.id ? '保存' : '新增' }}</el-button>
+      </div>
+      <el-table :data="groups" v-loading="groupsLoading" style="width: 100%">
+        <el-table-column prop="name" label="名称" />
+        <el-table-column prop="description" label="描述" />
+        <el-table-column prop="sort_order" label="排序" width="90" />
+        <el-table-column label="操作" width="130">
+          <template #default="{ row }">
+            <el-button type="primary" link @click="editGroup(row)">编辑</el-button>
+            <el-button type="danger" link @click="removeGroup(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
     </el-dialog>
   </div>
 </template>
@@ -193,9 +222,15 @@ import {
   createFriendLink,
   updateFriendLink,
   deleteFriendLink,
-  recheckFriendLink
+  recheckFriendLink,
+  getFriendLinkGroups,
+  createFriendLinkGroup,
+  updateFriendLinkGroup,
+  deleteFriendLinkGroup,
+  getFriendLinkGroupIDs,
+  setFriendLinkGroups
 } from '@/api/friendLink'
-import type { FriendLink } from '@/model/friendLink'
+import type { FriendLink, FriendLinkGroup } from '@/model/friendLink'
 import { usePagination } from '@/utils/pagination'
 import { formatDate } from '@/utils/date'
 
@@ -207,6 +242,11 @@ const filterStatus = ref('')
 const filterIsDied = ref<boolean | null>(null)
 const searchQuery = ref('')
 const dialogVisible = ref(false)
+const groupDialogVisible = ref(false)
+const groupsLoading = ref(false)
+const groups = ref<FriendLinkGroup[]>([])
+const groupForm = reactive({ id: 0, name: '', description: '', sort_order: 0 })
+const editGroupsLoadFailed = ref(false)
 const isEditMode = ref(false)
 const saving = ref(false)
 const formRef = ref<FormInstance>()
@@ -228,6 +268,7 @@ const form = reactive<{
   rejection_reason: string
   color: string
   tags: string[]
+  group_ids: number[]
 }>({
   id: 0,
   name: '',
@@ -245,7 +286,8 @@ const form = reactive<{
   is_died: false,
   rejection_reason: '',
   color: '',
-  tags: []
+  tags: [],
+  group_ids: []
 })
 
 const rules = reactive<FormRules>({
@@ -314,7 +356,25 @@ const fetchFriendLinks = async () => {
   }
 }
 
-onMounted(fetchFriendLinks)
+const fetchGroups = async () => {
+  groupsLoading.value = true
+  try {
+    const res = await getFriendLinkGroups()
+    if (res.code === 200) {
+      groups.value = res.data ?? []
+    } else {
+      ElMessage.error(res.message || '获取友链分组失败')
+    }
+  } catch {
+    ElMessage.error('获取友链分组失败')
+  } finally {
+    groupsLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetchFriendLinks(), fetchGroups()])
+})
 
 // Table and Actions
 const handleFilter = () => {
@@ -328,7 +388,7 @@ const handleSearch = () => {
 }
 
 // Dialog and Form
-const openFormDialog = (link?: FriendLink) => {
+const openFormDialog = async (link?: FriendLink) => {
   if (link) {
     isEditMode.value = true
     Object.assign(form, {
@@ -348,10 +408,25 @@ const openFormDialog = (link?: FriendLink) => {
       is_died: link.is_died ?? false,
       rejection_reason: link.rejection_reason || '',
       color: link.color || '',
-      tags: link.tags || []
+      tags: link.tags || [],
+      group_ids: []
     })
+    editGroupsLoadFailed.value = false
+    try {
+      const groupRes = await getFriendLinkGroupIDs(link.id)
+      if (groupRes.code === 200) {
+        form.group_ids = groupRes.data.group_ids
+      } else {
+        editGroupsLoadFailed.value = true
+        ElMessage.error(groupRes.message || '获取友链分组失败')
+      }
+    } catch {
+      editGroupsLoadFailed.value = true
+      ElMessage.error('获取友链分组失败')
+    }
   } else {
     isEditMode.value = false
+    editGroupsLoadFailed.value = false
   }
   dialogVisible.value = true
 }
@@ -375,18 +450,21 @@ const resetForm = () => {
     is_died: false,
     rejection_reason: '',
     color: '',
-    tags: []
+    tags: [],
+    group_ids: []
   })
+  editGroupsLoadFailed.value = false
 }
 
 const submitForm = async () => {
-  if (!formRef.value || saving.value) return
+  if (!formRef.value || saving.value || editGroupsLoadFailed.value) return
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   saving.value = true
   try {
+    let friendLinkId = form.id
     if (isEditMode.value) {
-          const { id, ...data } = form
+          const { id, group_ids: _groupIds, ...data } = form
           await updateFriendLink(id, { data })
           ElMessage.success('更新成功')
         } else {
@@ -403,8 +481,19 @@ const submitForm = async () => {
             color: form.color || undefined,
             tags: form.tags.length > 0 ? form.tags : undefined,
           }
-          await createFriendLink(payload)
+          const response = await createFriendLink(payload)
+          friendLinkId = response.data?.id ?? 0
           ElMessage.success('创建成功')
+        }
+        if (friendLinkId) {
+          try {
+            const groupsResponse = await setFriendLinkGroups(friendLinkId, form.group_ids)
+            if (groupsResponse.code !== 200) {
+              ElMessage.warning('友链已保存，但分组更新失败')
+            }
+          } catch {
+            ElMessage.warning('友链已保存，但分组更新失败')
+          }
         }
     dialogVisible.value = false
     await fetchFriendLinks()
@@ -413,6 +502,62 @@ const submitForm = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const openGroupDialog = async () => {
+  resetGroupForm()
+  groupDialogVisible.value = true
+  await fetchGroups()
+}
+
+const resetGroupForm = () => {
+  Object.assign(groupForm, { id: 0, name: '', description: '', sort_order: 0 })
+}
+
+const editGroup = (group: FriendLinkGroup) => {
+  Object.assign(groupForm, group)
+}
+
+const saveGroup = async () => {
+  if (!groupForm.name.trim()) {
+    ElMessage.warning('请输入分组名称')
+    return
+  }
+  try {
+    const payload = {
+      name: groupForm.name,
+      description: groupForm.description,
+      sort_order: groupForm.sort_order
+    }
+    const res = groupForm.id
+      ? await updateFriendLinkGroup(groupForm.id, payload)
+      : await createFriendLinkGroup(payload)
+    if (res.code !== 200 && res.code !== 201) {
+      ElMessage.error(res.message || '保存分组失败')
+      return
+    }
+    resetGroupForm()
+    await fetchGroups()
+    ElMessage.success('保存成功')
+  } catch {
+    ElMessage.error('保存分组失败')
+  }
+}
+
+const removeGroup = (id: number) => {
+  ElMessageBox.confirm('确定要删除这个分组吗？', '警告', { type: 'warning' }).then(async () => {
+    try {
+      const res = await deleteFriendLinkGroup(id)
+      if (res.code !== 200) {
+        ElMessage.error(res.message || '删除分组失败')
+        return
+      }
+      await fetchGroups()
+      ElMessage.success('删除成功')
+    } catch {
+      ElMessage.error('删除分组失败')
+    }
+  })
 }
 
 // Delete operations
@@ -549,7 +694,21 @@ const handleRssToggle = async (link: FriendLink) => {
 }
 
 .color-input-row .el-input {
+  flex: 1
+}
+
+.group-create-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.group-create-row .el-input:first-child {
   flex: 1;
+}
+
+.group-create-row .el-input:nth-child(2) {
+  flex: 1.5;
 }
 
 /* Responsive */

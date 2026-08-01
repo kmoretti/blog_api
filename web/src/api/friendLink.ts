@@ -4,7 +4,10 @@ import type {
   FriendLinkListParams,
   PaginatedFriendLinks,
   CreateFriendLinkPayload,
-  UpdateFriendLinkPayload
+  UpdateFriendLinkPayload,
+  FriendLinkGroup,
+  FriendLinkGroupIDs,
+  FriendLinkGroupPayload
 } from '@/model/friendLink'
 
 /**
@@ -22,7 +25,7 @@ export const getFriendLinks = (params: FriendLinkListParams): Promise<ApiRespons
 /**
  * 创建友链
  */
-export const createFriendLink = (data: CreateFriendLinkPayload): Promise<ApiResponse> => {
+export const createFriendLink = (data: CreateFriendLinkPayload): Promise<ApiResponse<{ id: number }>> => {
   return request({
     url: '/action/friend',
     method: 'post',
@@ -76,5 +79,50 @@ export const recheckFriendLink = (id: number): Promise<ApiResponse> => {
   return request({
     url: `/action/friend/${id}/recheck`,
     method: 'post'
+  })
+}
+
+export const getFriendLinkGroups = (): Promise<ApiResponse<FriendLinkGroup[]>> => {
+  return request({
+    url: '/action/friend/group',
+    method: 'get'
+  })
+}
+
+export const createFriendLinkGroup = (data: FriendLinkGroupPayload): Promise<ApiResponse<FriendLinkGroup>> => {
+  return request({
+    url: '/action/friend/group',
+    method: 'post',
+    data
+  })
+}
+
+export const updateFriendLinkGroup = (id: number, data: FriendLinkGroupPayload): Promise<ApiResponse> => {
+  return request({
+    url: `/action/friend/group/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export const deleteFriendLinkGroup = (id: number): Promise<ApiResponse> => {
+  return request({
+    url: `/action/friend/group/${id}`,
+    method: 'delete'
+  })
+}
+
+export const getFriendLinkGroupIDs = (id: number): Promise<ApiResponse<FriendLinkGroupIDs>> => {
+  return request({
+    url: `/action/friend/${id}/groups`,
+    method: 'get'
+  })
+}
+
+export const setFriendLinkGroups = (id: number, group_ids: number[]): Promise<ApiResponse> => {
+  return request({
+    url: `/action/friend/${id}/groups`,
+    method: 'put',
+    data: { group_ids }
   })
 }
